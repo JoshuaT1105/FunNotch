@@ -29,3 +29,7 @@ xcuserdata/
 # Local scratch
 *.log
 .env
+
+# The marketing site is deployed to Cloudflare from a zip, not from git,
+# and is not part of the app. Kept out of the public repo deliberately.
+Website/
