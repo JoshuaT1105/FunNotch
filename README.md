@@ -84,8 +84,10 @@ Sources/
   Views/        The notch panel and everything drawn in it
 Tools/
   MakeIcon.swift  Generates the app icon at build time
-Website/        funnotch.xyz — static, no build step
 ```
+
+The marketing site at [funnotch.xyz](https://funnotch.xyz) is deliberately not
+in this repo — it isn't part of the app, and it deploys separately.
 
 ## Permissions it asks for
 
