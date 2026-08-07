@@ -1,0 +1,51 @@
+FunNotch
+========
+
+To install: drag FunNotch.app onto the Applications shortcut in this window.
+
+First launch
+------------
+If this build was signed ad-hoc rather than with an Apple Developer ID, macOS
+will refuse to open it and say it is damaged or from an unidentified developer.
+It is neither — that is what Gatekeeper says about any app it cannot check with
+Apple.
+
+To get past it once:
+
+  1. Open Applications in Finder.
+  2. Right-click (or Control-click) FunNotch and choose Open.
+  3. Click Open in the dialog.
+
+macOS remembers the choice; after that it launches normally.
+
+If the dialog offers no Open button, run this in Terminal instead:
+
+  xattr -dr com.apple.quarantine /Applications/FunNotch.app
+
+Permissions it will ask for
+---------------------------
+  Automation       to read what Music, Spotify or your browser is playing
+  Calendars        for the agenda and the next-event widget
+  Location         for weather and the Wi-Fi network name
+  Camera           only if you turn the mirror on
+  Bluetooth        for connect/disconnect notices
+  Accessibility    only if you press "Turn on page access" in Settings
+
+Everything is optional. Say no to any of them and the matching feature says so
+instead of pretending. Settings > Diagnostics shows exactly what Fun Notch can
+and cannot currently see, and what to do about each gap.
+
+There is no menu bar icon by default — FunNotch lives in the notch itself.
+Hover it to open, and the gear in its top right opens Settings.
+
+Progress bars for browser media
+-------------------------------
+Reading a tab's title needs nothing. Reading its artist, artwork and playback
+position needs the browser's "Allow JavaScript from Apple Events" switch:
+
+  Chrome / Brave / Edge / Arc   View > Developer > Allow JavaScript from Apple Events
+  Safari                        Settings > Advanced > Show features for web
+                                developers, then Develop > Allow JavaScript
+                                from Apple Events
+
+Settings > Media has a button that will flip it for you.

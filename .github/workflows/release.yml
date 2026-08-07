@@ -1,0 +1,48 @@
+name: Release
+
+# Push a tag like v1.0.2 and this builds the universal app, packages it, and
+# attaches the dmg and zip to a GitHub Release. Those release assets are what
+# funnotch.xyz counts downloads from, so every release updates the counter on
+# the site automatically with no backend anywhere.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: Build universal and package
+        run: |
+          chmod +x build.sh
+          ./build.sh --universal --package
+
+      # The suite drives the real window manager, so it needs a GUI session.
+      # It is allowed to fail the job — a broken release is worse than a slow one.
+      - name: Self-test
+        run: build/FunNotch.app/Contents/MacOS/FunNotch --self-test
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+          generate_release_notes: true
+          body: |
+            Built from `${{ github.sha }}` by GitHub Actions.
+
+            **This build is signed ad-hoc, not notarised.** macOS will refuse
+            the first launch — https://funnotch.xyz/install explains how to open
+            it and what the warning does and does not mean.
