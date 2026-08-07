@@ -193,7 +193,20 @@ enum SelfTest {
 
         // MARK: System state
         info("battery", "\(BatteryManager.shared.percentageText), plugged in: \(BatteryManager.shared.isPluggedIn)")
-        check("battery was detected", BatteryManager.shared.hasBattery)
+
+        // A Mac mini, Studio or Pro has no battery, and neither does a CI
+        // runner. Asserting one exists made the suite fail on perfectly healthy
+        // desktops. What actually matters is that the manager agrees with
+        // itself: if it says there is a battery, it has to report a level.
+        if BatteryManager.shared.hasBattery {
+            check(
+                "battery level is readable",
+                (0 ... 1).contains(BatteryManager.shared.level),
+                detail: BatteryManager.shared.percentageText
+            )
+        } else {
+            info("battery", "none on this Mac — desktop or VM, battery checks skipped")
+        }
 
 
         info("Now Playing deprecated on this OS", "\(MusicManager.shared.isNowPlayingDeprecated)")
