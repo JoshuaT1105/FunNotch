@@ -717,9 +717,31 @@
       <a class="btn btn-primary" href="FunNotch-1.0.1.dmg" download data-download>Download the .dmg</a>
     </div>
 
-    <!-- Stays hidden until a real number arrives, so an unreachable counter
-         shows nothing at all rather than a broken dash. -->
-    <p class="dl-count" id="dl-count" hidden></p>
+    <!--
+      Always on the page, unlike the old hidden counter. The number comes from
+      GitHub's public release API — real completed downloads of the release
+      assets, which cannot be inflated by reloading this page. It shows an
+      em-dash until the request answers and keeps it if the request fails, so
+      a rate-limited API degrades to "unknown" rather than to a wrong number.
+    -->
+    <div class="dl-stats" id="dl-stats">
+      <div class="stat">
+        <div class="n" data-dl-total>&mdash;</div>
+        <div class="l">downloads on GitHub</div>
+      </div>
+      <div class="stat">
+        <div class="n">1.0.1</div>
+        <div class="l">current version</div>
+      </div>
+      <div class="stat">
+        <div class="n">2.5<span class="unit">MB</span></div>
+        <div class="l">universal binary</div>
+      </div>
+      <div class="stat">
+        <div class="n">GPL<span class="unit">-3.0</span></div>
+        <div class="l"><a href="https://github.com/JoshuaT1105/FunNotch">source on GitHub</a></div>
+      </div>
+    </div>
 
     <div class="reqs">
       <span>macOS 14 Sonoma or later</span>

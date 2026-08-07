@@ -23,40 +23,34 @@
 
   // --- Download counter --------------------------------------------------
   //
-  // Two ways to feed the number, and the page works with neither set — the
-  // element stays hidden and no request goes out, which is exactly how the
-  // site behaved before this existed.
+  // The number is on the page for everyone, not hidden until it is flattering.
   //
   //   GITHUB_REPO  "owner/repo". Counts real completed downloads of every
   //                release asset, straight from GitHub's public API. Needs no
-  //                backend and cannot be inflated, so it wins where both are
-  //                set. The repo has to be public; the app's source does not.
+  //                backend and cannot be inflated by reloading this page, so it
+  //                wins where both are set.
   //
   //   COUNTER_API  URL of a counter endpoint that answers `{ "total": N }` to
-  //                GET and increments on POST. See ../counter/README.md — this
-  //                counts button clicks, which is a looser thing to measure.
+  //                GET and increments on POST. Counts button clicks, which is a
+  //                looser thing to measure.
   var GITHUB_REPO = "JoshuaT1105/FunNotch";
   var COUNTER_API = "";
 
   (function () {
-    var out = document.getElementById("dl-count");
+    var out = document.querySelector("[data-dl-total]");
     if (!out || (!GITHUB_REPO && !COUNTER_API)) return;
 
     var shown = null;
+    out.classList.add("pending");
 
+    // Zero is a real answer and gets shown as one. Only a failed or nonsense
+    // response leaves the em-dash, so "we don't know" and "nobody yet" stay
+    // visibly different.
     function render(total) {
-      if (typeof total !== "number" || !isFinite(total) || total < 1) return;
+      if (typeof total !== "number" || !isFinite(total) || total < 0) return;
       shown = Math.floor(total);
-      out.textContent = "";
-      var strong = document.createElement("b");
-      strong.textContent = shown.toLocaleString();
-      out.appendChild(strong);
-      out.appendChild(
-        document.createTextNode(
-          (shown === 1 ? " download" : " downloads") + " so far"
-        )
-      );
-      out.hidden = false;
+      out.textContent = shown.toLocaleString();
+      out.classList.remove("pending");
     }
 
     // Every asset of every release added together, so old versions still count
@@ -607,19 +601,26 @@
         ctx.fillText(d.kind.glyph, d.x, d.y + 0.5);
       });
 
-      // The paddle, unmistakably: a lit bar with a glow under it, so it never
-      // reads as part of the panel background.
+      // The name of whatever is currently running, centred in the empty middle
+      // of the board — the app does this, and it is the only feedback that a
+      // collected drop actually did something.
+      var activeName = wide > 0 ? "Wide paddle" : slow > 0 ? "Slow ball" : null;
+      if (activeName) {
+        ctx.globalAlpha = Math.min(Math.max(wide, slow), 1);
+        ctx.fillStyle = "#fff";
+        ctx.font = "700 11px -apple-system, system-ui, sans-serif";
+        ctx.fillText(activeName, W / 2, H * 0.62);
+        ctx.globalAlpha = 1;
+      }
+
+      // A flat blue bar, matching the app. It used to carry a glow and a white
+      // highlight strip, added back when the paddle was invisible — but the
+      // paddle was invisible because it was being clipped, not because it was
+      // too dim, so the decoration only made it look unlike the real game.
       var half = paddleW() / 2;
       var py = paddleY() - PADDLE_H / 2;
-      ctx.save();
-      ctx.shadowColor = "rgba(10,132,255,0.85)";
-      ctx.shadowBlur = 9;
       ctx.fillStyle = "#0a84ff";
-      roundRect(paddleX - half, py, half * 2, PADDLE_H, 3.5);
-      ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      roundRect(paddleX - half + 2.5, py + 1.4, half * 2 - 5, 1.6, 1);
+      roundRect(paddleX - half, py, half * 2, PADDLE_H, PADDLE_H / 2);
       ctx.fill();
 
       ctx.fillStyle = "#fff";

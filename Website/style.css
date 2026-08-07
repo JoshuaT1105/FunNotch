@@ -853,7 +853,12 @@ h2 {
 }
 
 /* Game */
-.game-open { padding: 30px 12px 10px; }
+/* The whole stack has to fit inside `.notch.open`'s 203px, because that box
+   is `overflow: hidden`. It previously came to 221px — head 30, game head 25,
+   board 128, plus 38 of padding — so 18px was clipped off the bottom, which is
+   exactly where the paddle is drawn. It was being rendered into the cropped
+   strip, hence invisible. Budget now: 20 + 30 + 25 + 116 + 8 = 199. */
+.game-open { padding: 20px 12px 8px; }
 .board { width: 100%; height: 100%; display: block; }
 
 /* ---------- Plain hairline grid, no cards, no icons ---------- */
@@ -1073,17 +1078,58 @@ h2 {
    badge, and a number nobody asked for should not outrank the buttons above
    it. `[hidden]` is honoured by the reset, so an unreachable counter simply
    isn't there. */
-.dl-count {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
+/* ---------- Download stats ----------
+
+   Reuses the .stat type scale from the comparison page so the two read as one
+   system. Always rendered — an em-dash while the count is in flight, and left
+   as an em-dash if GitHub rate-limits us, because an unknown number should
+   look unknown rather than look like zero. */
+
+.dl-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 24px;
+  margin: 34px 0 0;
+  border-top: 1px solid var(--rule-soft);
 }
 
-.dl-count b {
+.dl-stats .stat { padding: 22px 0; }
+
+.dl-stats .n {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 620;
+  letter-spacing: -0.032em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.dl-stats .n .unit {
+  font-size: 0.55em;
+  font-weight: 560;
+  letter-spacing: 0;
   color: var(--dim);
-  font-weight: 400;
+  margin-left: 1px;
+}
+
+.dl-stats .l {
+  font-size: 13px;
+  color: var(--faint);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.dl-stats .l a { color: var(--faint); }
+.dl-stats .l a:hover { color: var(--dim); }
+
+/* The count fading in on arrival stops the em-dash → number swap reading as
+   a glitch. */
+.dl-stats .n[data-dl-total] { transition: opacity 0.25s ease; }
+.dl-stats .n[data-dl-total].pending { opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dl-stats .n[data-dl-total] { transition: none; }
 }
 
 .note {
@@ -1714,4 +1760,4 @@ footer a:hover { color: var(--text); }
 .game-head .best { color: var(--accent); font-size: 10px; }
 
 .game-open { padding-bottom: 8px; }
-.game-open .board { width: 100%; height: 128px; display: block; margin-top: 4px; }
+.game-open .board { width: 100%; height: 116px; display: block; margin-top: 4px; }
