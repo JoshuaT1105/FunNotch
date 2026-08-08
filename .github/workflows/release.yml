@@ -33,6 +33,15 @@ jobs:
       - name: Self-test
         run: build/FunNotch.app/Contents/MacOS/FunNotch --self-test
 
+      # A second copy under a name with no version in it. The website's Download
+      # button points at /releases/latest/download/FunNotch.dmg, and that URL only
+      # keeps working if every release carries an asset with exactly that name —
+      # a versioned filename would break the button on every release.
+      - name: Add a stable-named copy for the website
+        run: |
+          cp dist/FunNotch-*.dmg dist/FunNotch.dmg
+          ls -la dist/
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
