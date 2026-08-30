@@ -89,7 +89,7 @@ FRAMEWORKS=(
   AVFoundation AudioToolbox CoreAudio CoreLocation CoreMedia CoreImage CoreGraphics
   CoreWLAN
   EventKit IOBluetooth IOKit Quartz QuartzCore ServiceManagement
-  QuickLookThumbnailing UniformTypeIdentifiers UserNotifications
+  QuickLookThumbnailing UniformTypeIdentifiers UserNotifications Vision
 )
 FRAMEWORK_FLAGS=()
 for fw in "${FRAMEWORKS[@]}"; do

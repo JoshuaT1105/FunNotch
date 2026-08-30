@@ -60,6 +60,14 @@ struct ShelfView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.5))
 
+            if !shelf.missingOnRestore.isEmpty {
+                Label("\(shelf.missingOnRestore.count) moved", systemImage: "questionmark.folder")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.orange.opacity(0.85))
+                    .help("These files were on the shelf but have since been moved or deleted:\n" +
+                          shelf.missingOnRestore.joined(separator: "\n"))
+            }
+
             Spacer()
 
             ShelfToolbarButton(systemName: "square.and.arrow.up", label: "Share") {
@@ -252,6 +260,13 @@ private struct ShelfItemTile: View {
             Button("Share…") { ShareAnchor.share(urls: [item.url]) }
             Button("AirDrop") { shelf.airDrop([item.url]) }
             Button("Copy") { shelf.copyToPasteboard([item.url]) }
+            Button("Copy Path") { shelf.copyPath(item) }
+            Button("Copy Filename") { shelf.copyFilename(item) }
+            if shelf.canRecogniseText(item) {
+                Button("Copy Text from Image") {
+                    shelf.copyTextFromImage(item) { _ in }
+                }
+            }
             Divider()
             Button("Remove from Shelf") { shelf.remove(id: item.id) }
         }

@@ -19,7 +19,9 @@ final class MouseTracker {
     /// Called with the current pointer location, in global screen coordinates.
     var onMove: ((CGPoint) -> Void)?
     /// Called with (location, scrollDeltaY) for two-finger swipes.
-    var onScroll: ((CGPoint, CGFloat) -> Void)?
+    /// Location, vertical delta, horizontal delta. Vertical opens and closes
+    /// the notch; horizontal is free for volume.
+    var onScroll: ((CGPoint, CGFloat, CGFloat) -> Void)?
     /// Called with the click location for taps on the notch.
     var onClick: ((CGPoint) -> Void)?
     /// Called when a file drag starts or ends anywhere on screen.
@@ -51,7 +53,7 @@ final class MouseTracker {
 
         addMonitors(matching: .scrollWheel) { [weak self] event in
             guard let self else { return }
-            self.onScroll?(NSEvent.mouseLocation, event.scrollingDeltaY)
+            self.onScroll?(NSEvent.mouseLocation, event.scrollingDeltaY, event.scrollingDeltaX)
         }
 
         addMonitors(matching: [.leftMouseUp]) { [weak self] _ in

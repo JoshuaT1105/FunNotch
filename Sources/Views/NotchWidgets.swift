@@ -95,6 +95,7 @@ private struct NotchWidgetButton: View {
         case .weather: WeatherWidget()
         case .wifi: WiFiWidget()
         case .moonPhase: MoonWidget()
+        case .shelfCount: ShelfCountWidget()
         }
     }
 
@@ -120,6 +121,9 @@ private struct NotchWidgetButton: View {
             MusicManager.shared.openPlayingApp()
         case .focusTab:
             viewModel.currentTab = .focus
+            viewModel.open()
+        case .shelfTab:
+            viewModel.currentTab = .shelf
             viewModel.open()
         case .locationAccess:
             if WeatherManager.shared.isLocationAuthorized {
@@ -400,5 +404,31 @@ private struct MoonWidget: View {
             .fixedSize()
             .help(MoonPhase.name(on: context.date))
         }
+    }
+}
+
+/// How many files are waiting on the shelf.
+///
+/// `ShelfView` already says "3 items", but only once you have opened the notch
+/// and are looking straight at the shelf — the one moment you do not need
+/// telling. On the closed notch it is what stops the shelf becoming a place
+/// people put things and then forget about.
+private struct ShelfCountWidget: View {
+    @ObservedObject private var shelf = ShelfManager.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: shelf.items.isEmpty ? "tray" : "tray.full")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(shelf.items.isEmpty ? 0.45 : 0.85))
+            Text("\(shelf.items.count)")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .fixedSize()
+        .help(shelf.items.isEmpty
+              ? "The shelf is empty"
+              : "\(shelf.items.count) item\(shelf.items.count == 1 ? "" : "s") on the shelf")
     }
 }

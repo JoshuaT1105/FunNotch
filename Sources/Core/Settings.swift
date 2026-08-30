@@ -415,6 +415,14 @@ final class Settings: ObservableObject {
         set { write("enableGestures", newValue) }
     }
 
+    /// Scrolling sideways across the closed notch changes the system volume.
+    /// Horizontal on purpose: vertical already opens and closes the notch, and
+    /// one axis doing two jobs makes both feel unreliable.
+    var scrollToChangeVolume: Bool {
+        get { bool("scrollToChangeVolume", true) }
+        set { write("scrollToChangeVolume", newValue) }
+    }
+
     var closeGestureEnabled: Bool {
         get { bool("closeGestureEnabled", true) }
         set { write("closeGestureEnabled", newValue) }
@@ -786,6 +794,13 @@ final class Settings: ObservableObject {
     var rememberLastTab: Bool {
         get { bool("rememberLastTab", false) }
         set { write("rememberLastTab", newValue) }
+    }
+
+    /// The Notes scratchpad tab. On by default: it is the single most
+    /// requested notch feature and it costs one tab.
+    var showNotes: Bool {
+        get { bool("showNotes", true) }
+        set { write("showNotes", newValue) }
     }
 
     var showGame: Bool {

@@ -284,6 +284,29 @@ enum SelfTest {
         check("a focus session stops", !FocusManager.shared.isActive)
         Settings.shared.focusBlockWebsites = savedBlocking
 
+        // MARK: Notes
+        //
+        // The whole point of the notes tab is that it lands as a real file on
+        // the Desktop, so the round trip is worth asserting rather than
+        // assuming: the folder can be missing, or Desktop access unGranted.
+        let notes = NotesManager.shared
+        info("notes file", notes.fileURL.path)
+        let notesBefore = notes.text
+        notes.text = "self test note \(UUID().uuidString)"
+        notes.saveNow()
+        if let error = notes.saveError {
+            check("the note saved to the Desktop", false, detail: error)
+        } else {
+            let readBack = try? String(contentsOf: notes.fileURL, encoding: .utf8)
+            check(
+                "the note saved to the Desktop",
+                readBack == notes.text,
+                detail: notes.fileURL.deletingLastPathComponent().lastPathComponent + "/Notes.txt"
+            )
+        }
+        notes.text = notesBefore
+        notes.saveNow()
+
         // MARK: Screenshots, clipboard, Bluetooth
         let shots = ScreenshotWatcher.screenshotDirectory()
         info("screenshot folder", shots.path)

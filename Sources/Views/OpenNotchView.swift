@@ -28,6 +28,8 @@ struct OpenNotchView: View {
                     ClipboardView()
                 case .focus:
                     FocusView()
+                case .notes:
+                    NotesView()
                 case .game:
                     // Belt and braces: the tab is already gone from the header
                     // during a session, but nothing should be able to land here
@@ -128,6 +130,7 @@ struct NotchHeader: View {
             switch tab {
             case .shelf: return settings.shelfEnabled
             case .clipboard: return settings.clipboardHistoryEnabled
+            case .notes: return settings.showNotes
             // A focus session is a promise not to get distracted, and a game in
             // the notch is the most distracting thing in here.
             case .game: return settings.showGame && !FocusManager.shared.isActive

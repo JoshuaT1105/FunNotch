@@ -32,6 +32,7 @@ enum NotchTab: String, CaseIterable, Identifiable {
     case shelf = "Shelf"
     case clipboard = "Clipboard"
     case focus = "Focus"
+    case notes = "Notes"
     case game = "Game"
 
     var id: String { rawValue }
@@ -42,6 +43,7 @@ enum NotchTab: String, CaseIterable, Identifiable {
         case .shelf: return "tray.fill"
         case .clipboard: return "doc.on.clipboard.fill"
         case .focus: return "cup.and.saucer.fill"
+        case .notes: return "note.text"
         case .game: return "gamecontroller.fill"
         }
     }
@@ -136,6 +138,7 @@ enum NotchWidget: String, CaseIterable, Identifiable {
     case weather = "Weather"
     case wifi = "Wi-Fi"
     case moonPhase = "Moon phase"
+    case shelfCount = "Shelf count"
 
     var id: String { rawValue }
 
@@ -144,7 +147,7 @@ enum NotchWidget: String, CaseIterable, Identifiable {
     var estimatedWidth: CGFloat {
         switch self {
         case .battery, .cpu, .memory, .disk, .weather: return 56
-        case .clock, .focusTimer, .moonPhase: return 54
+        case .clock, .focusTimer, .moonPhase, .shelfCount: return 54
         case .date, .wifi: return 82
         case .nextEvent, .nowPlaying: return 132
         }
@@ -164,6 +167,7 @@ enum NotchWidget: String, CaseIterable, Identifiable {
         case .weather: return "cloud.sun"
         case .wifi: return "wifi"
         case .moonPhase: return "moonphase.waxing.crescent"
+        case .shelfCount: return "tray.full"
         }
     }
 
@@ -180,6 +184,7 @@ enum NotchWidget: String, CaseIterable, Identifiable {
         case .weather: return .app("com.apple.weather")
         case .wifi: return .locationAccess
         case .moonPhase: return nil
+        case .shelfCount: return .shelfTab
         }
     }
 }
@@ -248,6 +253,7 @@ enum WidgetClickTarget: Equatable {
     case nextMeeting
     case playingApp
     case focusTab
+    case shelfTab
     case locationAccess
 }
 

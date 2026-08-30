@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import Quartz
 import QuickLookThumbnailing
+import Vision
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -39,6 +40,11 @@ final class ShelfManager: NSObject, ObservableObject {
     static let shared = ShelfManager()
 
     @Published private(set) var items: [ShelfItem] = []
+
+    /// Names of items whose file had moved or been deleted by the time the
+    /// shelf was restored. Surfaced once so a vanished item is explained
+    /// rather than just gone.
+    @Published private(set) var missingOnRestore: [String] = []
     @Published var selection: Set<UUID> = []
 
     private let bookmarksKey = "shelfBookmarks"
@@ -155,6 +161,7 @@ final class ShelfManager: NSObject, ObservableObject {
     private func restore() {
         guard let bookmarks = UserDefaults.standard.array(forKey: bookmarksKey) as? [Data] else { return }
         var restored: [ShelfItem] = []
+        var missing: [String] = []
 
         for data in bookmarks {
             var isStale = false
@@ -164,7 +171,13 @@ final class ShelfManager: NSObject, ObservableObject {
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             ) else { continue }
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                // The file moved or was deleted since it was put on the shelf.
+                // Dropping it silently reads as data loss to anyone who
+                // remembers putting it there, so it is counted and reported.
+                missing.append(url.lastPathComponent)
+                continue
+            }
 
             if url.startAccessingSecurityScopedResource() {
                 accessedURLs.append(url)
@@ -173,6 +186,10 @@ final class ShelfManager: NSObject, ObservableObject {
         }
 
         items = restored
+        missingOnRestore = missing
+        if !missing.isEmpty {
+            DiagnosticLog.write("shelf", "dropped \(missing.count) item(s) whose file had moved: \(missing.joined(separator: ", "))")
+        }
         loadThumbnails()
     }
 
@@ -317,6 +334,61 @@ final class ShelfManager: NSObject, ObservableObject {
     }
 
     // MARK: - Removing
+
+    /// True when the item is an image we could read text out of.
+    func canRecogniseText(_ item: ShelfItem) -> Bool {
+        guard let type = UTType(filenameExtension: item.url.pathExtension.lowercased()) else { return false }
+        return type.conforms(to: .image)
+    }
+
+    /// Pulls any text out of a dropped image and puts it on the pasteboard.
+    ///
+    /// Vision does this entirely on-device: no network, no permission prompt,
+    /// nothing leaves the Mac. Screenshot in, text out.
+    func copyTextFromImage(_ item: ShelfItem, completion: @escaping (String?) -> Void) {
+        let url = item.url
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+            else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+
+            let handler = VNImageRequestHandler(cgImage: image, options: [:])
+            try? handler.perform([request])
+
+            let text = (request.results ?? [])
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: "\n")
+
+            DispatchQueue.main.async {
+                guard !text.isEmpty else { completion(nil); return }
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+                completion(text)
+            }
+        }
+    }
+
+    /// Full POSIX path, for pasting into a terminal or an editor.
+    func copyPath(_ item: ShelfItem) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(item.url.path, forType: .string)
+    }
+
+    /// Just the filename.
+    func copyFilename(_ item: ShelfItem) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(item.url.lastPathComponent, forType: .string)
+    }
 
     func remove(id: UUID) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
