@@ -68,6 +68,10 @@ final class ClipboardManager: ObservableObject {
     @Published private(set) var entries: [ClipboardEntry] = []
 
     private var timer: Timer?
+    /// Sweeps expired entries while the app sits idle, so a history left alone
+    /// overnight is already empty in the morning rather than emptying itself
+    /// the next time you happen to copy something.
+    private var expiryTimer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
     /// Change count of writes we made ourselves, so pasting back does not
     /// re-record the same thing.
@@ -82,6 +86,9 @@ final class ClipboardManager: ObservableObject {
 
     private init() {
         restore()
+        // Anything already past its expiry when the app starts goes now, before
+        // the history is ever shown.
+        if expireOldEntries() { persist() }
     }
 
     func start() {
@@ -93,6 +100,23 @@ final class ClipboardManager: ObservableObject {
             .store(in: &cancellables)
 
         restartPolling()
+        startExpirySweep()
+    }
+
+    private func startExpirySweep() {
+        expiryTimer?.invalidate()
+        // Hourly is plenty for a setting measured in hours, and the tolerance
+        // lets macOS coalesce it with other timers instead of waking the CPU
+        // on its own account.
+        let timer = Timer(timeInterval: 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.expireOldEntries() else { return }
+                self.persist()
+            }
+        }
+        timer.tolerance = 300
+        RunLoop.main.add(timer, forMode: .common)
+        expiryTimer = timer
     }
 
     private func restartPolling() {
@@ -161,6 +185,8 @@ final class ClipboardManager: ObservableObject {
                 at: 0
             )
         }
+
+        expireOldEntries()
 
         // Pinned entries do not count against the limit and are never dropped.
         let limit = max(Settings.shared.clipboardHistoryLimit, 1)
@@ -269,6 +295,21 @@ final class ClipboardManager: ObservableObject {
         persist()
     }
 
+    /// Drops unpinned entries past their expiry. Pinned ones are exempt, the
+    /// same as with the count limit: pinning is the way you say "keep this".
+    ///
+    /// Returns true when something was actually removed, so callers can avoid
+    /// a pointless write to disk on the common no-op case.
+    @discardableResult
+    func expireOldEntries() -> Bool {
+        let hours = Settings.shared.clipboardExpiryHours
+        guard hours > 0 else { return false }
+        let cutoff = Date().addingTimeInterval(-Double(hours) * 3600)
+        let before = entries.count
+        entries.removeAll { !$0.isPinned && $0.copiedAt < cutoff }
+        return entries.count != before
+    }
+
     /// Clears everything except pinned entries.
     func clear() {
         entries.removeAll { !$0.isPinned }
@@ -281,23 +322,41 @@ final class ClipboardManager: ObservableObject {
     // copied files may have moved by then.
 
     private func persist() {
-        let texts = entries.compactMap { entry -> String? in
+        // Stored as [[text, copiedAt]] rather than a bare list of strings, so
+        // an entry's age survives a relaunch. Without the timestamp everything
+        // came back as `.distantPast`, which the expiry sweep would delete on
+        // sight — the history would empty itself every launch.
+        let rows: [[Any]] = entries.compactMap { entry in
             guard case let .text(value) = entry.payload else { return nil }
-            return value
+            return [value, entry.copiedAt.timeIntervalSince1970]
         }
-        UserDefaults.standard.set(Array(texts.prefix(50)), forKey: storageKey)
+        UserDefaults.standard.set(Array(rows.prefix(50)), forKey: storageKey)
     }
 
     private func restore() {
         let pinned = Set(Settings.shared.clipboardPinned)
-        guard let texts = UserDefaults.standard.stringArray(forKey: storageKey) else { return }
-        entries = texts.map {
+        let stored = UserDefaults.standard.array(forKey: storageKey) ?? []
+
+        // Rows are [text, timestamp]; a plain string is the pre-1.0.2 format,
+        // which is read once and rewritten in the new shape on the next save.
+        // Those have no known age, so they are treated as copied just now
+        // rather than expired immediately.
+        let decoded: [(String, Date)] = stored.compactMap { row in
+            if let text = row as? String { return (text, Date()) }
+            guard let pair = row as? [Any],
+                  let text = pair.first as? String else { return nil }
+            let when = (pair.count > 1 ? pair[1] as? Double : nil).map(Date.init(timeIntervalSince1970:))
+            return (text, when ?? Date())
+        }
+        guard !decoded.isEmpty else { return }
+
+        entries = decoded.map {
             ClipboardEntry(
                 id: UUID(),
-                payload: .text($0),
-                copiedAt: .distantPast,
+                payload: .text($0.0),
+                copiedAt: $0.1,
                 sourceApp: nil,
-                isPinned: pinned.contains($0)
+                isPinned: pinned.contains($0.0)
             )
         }
     }

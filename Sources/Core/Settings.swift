@@ -595,6 +595,16 @@ final class Settings: ObservableObject {
         set { write("clipboardHistoryLimit", newValue) }
     }
 
+    /// Drop unpinned clipboard entries older than this, in hours. 0 keeps them
+    /// forever. A day is the default because clipboard history is a
+    /// convenience, not an archive, and everything you have ever copied
+    /// sitting on disk indefinitely is a liability rather than a feature.
+    /// Pinned entries ignore this, the same way they ignore the count limit.
+    var clipboardExpiryHours: Int {
+        get { integer("clipboardExpiryHours", 24) }
+        set { write("clipboardExpiryHours", newValue) }
+    }
+
     // MARK: - Bluetooth
 
     var bluetoothActivity: Bool {
@@ -769,6 +779,14 @@ final class Settings: ObservableObject {
     }
 
     // MARK: - Game
+
+    /// Reopen on whichever tab you were last using instead of always Home.
+    /// Off by default: resetting to Home makes each open predictable, which is
+    /// right for most people and wrong for anyone who lives in the shelf.
+    var rememberLastTab: Bool {
+        get { bool("rememberLastTab", false) }
+        set { write("rememberLastTab", newValue) }
+    }
 
     var showGame: Bool {
         get { bool("showGame", true) }

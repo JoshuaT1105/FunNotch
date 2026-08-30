@@ -931,6 +931,7 @@ private struct ShelfSettings: View {
             Section("Shelf") {
                 Toggle("Enable the shelf", isOn: $settings.shelfEnabled)
                 Toggle("Open the shelf when a drag starts", isOn: $settings.openShelfByDefault)
+                Toggle("Reopen on the last tab I used", isOn: $settings.rememberLastTab)
                     .disabled(!settings.shelfEnabled)
                 Toggle("Detect drags anywhere on screen", isOn: $settings.expandedDragDetection)
                     .disabled(!settings.shelfEnabled)
@@ -1040,6 +1041,23 @@ private struct ClipboardSettings: View {
                     }
                 }
                 .disabled(!settings.clipboardHistoryEnabled)
+
+                Picker("Forget after", selection: $settings.clipboardExpiryHours) {
+                    Text("1 hour").tag(1)
+                    Text("8 hours").tag(8)
+                    Text("24 hours").tag(24)
+                    Text("3 days").tag(72)
+                    Text("7 days").tag(168)
+                    Text("30 days").tag(720)
+                    Text("Never").tag(0)
+                }
+                .disabled(!settings.clipboardHistoryEnabled)
+
+                Text(settings.clipboardExpiryHours == 0
+                     ? "Entries are kept until they fall off the end of the list. Pinned entries are always kept."
+                     : "Entries older than this are deleted automatically. Pinned entries are never deleted.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 LabeledContent("Stored now") {
                     Text("\(clipboard.entries.count)")
@@ -1382,6 +1400,8 @@ private struct CalendarToggle: View {
 
 private struct AboutSettings: View {
     @ObservedObject private var settings = Settings.shared
+    @ObservedObject private var updates = UpdateManager.shared
+    @State private var autoUpdate = UpdateManager.shared.automaticallyChecks
 
     private var version: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -1407,6 +1427,28 @@ private struct AboutSettings: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 420)
                 .font(.callout)
+
+            VStack(spacing: 8) {
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .disabled(!updates.canCheckForUpdates)
+
+                Toggle("Check automatically", isOn: $autoUpdate)
+                    .toggleStyle(.checkbox)
+                    .onChange(of: autoUpdate) { _, value in
+                        updates.automaticallyChecks = value
+                    }
+
+                if let last = updates.lastCheckedAt {
+                    Text("Last checked \(last.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Not checked yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 4)
 
             HStack {
                 Button("Reset all settings") {

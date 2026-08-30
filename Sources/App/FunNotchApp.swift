@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenshotWatcher.shared.start()
         DownloadWatcher.shared.start()
         ClipboardManager.shared.start()
+        UpdateManager.shared.start()
+        LoginItemManager.repairRegistration()
         BluetoothMonitor.shared.start()
 
         NotchWindowManager.shared.start()

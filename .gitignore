@@ -33,3 +33,6 @@ xcuserdata/
 # The marketing site is deployed to Cloudflare from a zip, not from git,
 # and is not part of the app. Kept out of the public repo deliberately.
 Website/
+
+# Sparkle is fetched by Tools/fetch-sparkle.sh, not committed.
+Vendor/

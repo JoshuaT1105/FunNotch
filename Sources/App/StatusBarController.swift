@@ -165,6 +165,12 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        updates.isEnabled = UpdateManager.shared.canCheckForUpdates
+        menu.addItem(updates)
+
         menu.addItem(withTitle: "Restart Fun Notch", action: #selector(restart), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Fun Notch", action: #selector(quit), keyEquivalent: "q").target = self
@@ -216,6 +222,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         ShelfManager.shared.clear()
     }
 
+    @objc private func checkForUpdates() {
+        UpdateManager.shared.checkForUpdates()
+    }
+
     @objc private func openSettings() {
         SettingsWindowController.shared.show()
     }
@@ -234,6 +244,41 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 enum LoginItemManager {
     static var isEnabled: Bool {
         SMAppService.mainApp.status == .enabled
+    }
+
+    /// Re-asserts the login item against what macOS actually believes.
+    ///
+    /// `SMAppService` registers a specific bundle path. Move the app — from
+    /// Downloads to Applications, say, which is exactly what everyone does
+    /// once — and the old registration is left pointing at a bundle that is no
+    /// longer there. The stored preference still says "on" while the app
+    /// silently stops launching at login, and the Settings toggle cheerfully
+    /// reports the wrong thing.
+    ///
+    /// Called on launch: if the two disagree, macOS wins and the registration
+    /// is redone from the current location.
+    static func repairRegistration() {
+        let wanted = Settings.shared.launchAtLogin
+        let actual = SMAppService.mainApp.status
+
+        switch (wanted, actual) {
+        case (true, .enabled):
+            break                       // agreed, nothing to do
+        case (true, _):
+            // Wanted on, but macOS says otherwise. Re-register from here.
+            try? SMAppService.mainApp.unregister()
+            do {
+                try SMAppService.mainApp.register()
+            } catch {
+                // Could not re-register, so stop claiming it is on.
+                Settings.shared.launchAtLogin = false
+            }
+        case (false, .enabled):
+            // A stale registration from a previous install. Clear it.
+            try? SMAppService.mainApp.unregister()
+        case (false, _):
+            break
+        }
     }
 
     static func setEnabled(_ enabled: Bool) {

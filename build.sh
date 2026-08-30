@@ -31,8 +31,8 @@ cd "$(dirname "$0")"
 
 APP_NAME="FunNotch"
 BUNDLE_ID="com.funnotch.FunNotch"
-VERSION="1.0.1"
-BUILD_NUMBER="2"
+VERSION="1.0.2"
+BUILD_NUMBER="3"
 MIN_MACOS="14.0"
 
 BUILD_DIR="build"
@@ -96,9 +96,19 @@ for fw in "${FRAMEWORKS[@]}"; do
   FRAMEWORK_FLAGS+=(-framework "$fw")
 done
 
+# Sparkle's public signing key. The matching private key is in the login
+# Keychain ("Private key for signing Sparkle updates") and must be backed up:
+# lose it and no existing install can ever be updated again.
+SPARKLE_PUBLIC_KEY="Tt+/6ryqRjQqe9D+8b5a8d1q1Icgc+3zyOpA2d2z+t0="
+
+# Sparkle powers in-app updates. Fetched rather than committed; see the script.
+"$(dirname "$0")/Tools/fetch-sparkle.sh"
+SPARKLE_DIR="$(cd "$(dirname "$0")" && pwd)/Vendor"
+FRAMEWORKS_DIR="$APP_DIR/Contents/Frameworks"
+
 echo "==> Cleaning"
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
 compile_slice() {
   local arch="$1"
@@ -112,6 +122,8 @@ compile_slice() {
     -parse-as-library \
     -module-name "$APP_NAME" \
     "${FRAMEWORK_FLAGS[@]}" \
+    -F "$SPARKLE_DIR" -framework Sparkle \
+    -Xlinker -rpath -Xlinker "@executable_path/../Frameworks" \
     -o "$out" \
     $SOURCES
 }
@@ -126,6 +138,10 @@ if [ "$UNIVERSAL" -eq 1 ]; then
 else
   compile_slice "$(uname -m)" "$MACOS_DIR/$APP_NAME"
 fi
+
+echo "==> Embedding Sparkle"
+rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
+cp -R "$SPARKLE_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
 
 echo "==> Writing Info.plist"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
@@ -144,6 +160,19 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key>  <string>$MIN_MACOS</string>
     <key>NSHighResolutionCapable</key> <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+
+    <!-- Sparkle. The public key is the trust anchor: an update is installed
+         only if it carries an EdDSA signature made with the matching private
+         key, which lives in the developer's login Keychain and nowhere else.
+         That check is what makes updates safe despite ad-hoc code signing. -->
+    <!-- Served from the repo rather than funnotch.xyz on purpose. If the feed
+         is unreachable every install silently stops updating, and the domain
+         has already been suspended once by the registrar. GitHub is the more
+         durable host for the one file that keeps everyone else current. -->
+    <key>SUFeedURL</key>              <string>https://raw.githubusercontent.com/JoshuaT1105/FunNotch/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>          <string>$SPARKLE_PUBLIC_KEY</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
 
     <!-- Menu bar only: no Dock icon, no app switcher entry. -->
     <key>LSUIElement</key><true/>

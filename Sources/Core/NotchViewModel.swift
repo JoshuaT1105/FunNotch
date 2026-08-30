@@ -125,8 +125,11 @@ final class NotchViewModel: ObservableObject {
         withAnimation(.notchClose) {
             notchState = .closed
         }
-        // Reset back to the default tab so the next open is predictable.
-        currentTab = .home
+        // Reset back to the default tab so the next open is predictable,
+        // unless the user has asked for the last tab to be remembered.
+        if !settings.rememberLastTab {
+            currentTab = .home
+        }
         sneakPeek.show = false
     }
 
