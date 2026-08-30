@@ -415,14 +415,6 @@ final class Settings: ObservableObject {
         set { write("enableGestures", newValue) }
     }
 
-    /// Scrolling sideways across the closed notch changes the system volume.
-    /// Horizontal on purpose: vertical already opens and closes the notch, and
-    /// one axis doing two jobs makes both feel unreliable.
-    var scrollToChangeVolume: Bool {
-        get { bool("scrollToChangeVolume", true) }
-        set { write("scrollToChangeVolume", newValue) }
-    }
-
     var closeGestureEnabled: Bool {
         get { bool("closeGestureEnabled", true) }
         set { write("closeGestureEnabled", newValue) }
@@ -794,6 +786,13 @@ final class Settings: ObservableObject {
     var rememberLastTab: Bool {
         get { bool("rememberLastTab", false) }
         set { write("rememberLastTab", newValue) }
+    }
+
+    /// Show the weather on the home tab when nothing is playing, instead of an
+    /// empty player. Turning it off restores the placeholder artwork.
+    var showWeatherWhenIdle: Bool {
+        get { bool("showWeatherWhenIdle", true) }
+        set { write("showWeatherWhenIdle", newValue) }
     }
 
     /// The Notes scratchpad tab. On by default: it is the single most

@@ -16,7 +16,6 @@ final class NotchWindowManager: ObservableObject {
 
     private(set) var controllers: [NotchWindowController] = []
     private var cancellables = Set<AnyCancellable>()
-    private var volumeAccumulator: CGFloat = 0
     private var gestureAccumulator: CGFloat = 0
     private var lastGestureReset = Date()
 
@@ -61,7 +60,7 @@ final class NotchWindowManager: ObservableObject {
 
         let tracker = MouseTracker.shared
         tracker.onMove = { [weak self] point in self?.handlePointer(point) }
-        tracker.onScroll = { [weak self] point, dy, dx in self?.handleScroll(at: point, delta: dy, horizontal: dx) }
+        tracker.onScroll = { [weak self] point, delta in self?.handleScroll(at: point, delta: delta) }
         tracker.onClick = { [weak self] point in self?.handleClick(at: point) }
         tracker.onDragStateChange = { [weak self] dragging in
             self?.viewModels.forEach { $0.dragDetectorTargeting = dragging }
@@ -139,33 +138,12 @@ final class NotchWindowManager: ObservableObject {
         }
     }
 
-    private func handleScroll(at point: CGPoint, delta: CGFloat, horizontal: CGFloat) {
+    private func handleScroll(at point: CGPoint, delta: CGFloat) {
         guard settings.enableGestures else { return }
         guard let controller = controllers.first(where: { $0.hoverRect.contains(point) }) else {
             gestureAccumulator = 0
-            volumeAccumulator = 0
             return
         }
-
-        // Sideways over the closed notch is volume. Deciding on the dominant
-        // axis rather than reacting to both keeps a slightly diagonal scroll
-        // from opening the notch and changing the volume at the same time.
-        if settings.scrollToChangeVolume,
-           controller.viewModel.notchState == .closed,
-           abs(horizontal) > abs(delta) {
-            gestureAccumulator = 0
-            volumeAccumulator += horizontal
-            // A trackpad emits a lot of small deltas; this is about one
-            // notch of volume per comfortable flick.
-            let step: CGFloat = 6
-            while abs(volumeAccumulator) >= step {
-                let direction: Float = volumeAccumulator > 0 ? 1 : -1
-                volumeAccumulator -= step * (volumeAccumulator > 0 ? 1 : -1)
-                HUDManager.shared.nudgeVolume(by: direction * 0.0625)
-            }
-            return
-        }
-        volumeAccumulator = 0
 
         // Reset the accumulator between distinct swipes.
         if Date().timeIntervalSince(lastGestureReset) > 0.4 {

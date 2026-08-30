@@ -406,6 +406,11 @@ private struct AppearanceSettings: View {
             }
 
             Section("Mirror") {
+                Toggle("Show the weather when nothing is playing", isOn: $settings.showWeatherWhenIdle)
+                Text("Fills the empty player on the home tab with the current conditions and a small pixel animation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Show the camera mirror", isOn: $settings.showMirror)
                 Picker("Mirror shape", selection: $settings.mirrorShape) {
                     ForEach(MirrorShapeEnum.allCases) { shape in

@@ -228,13 +228,6 @@ final class HUDManager: ObservableObject {
     /// macOS disables it. So each one resolves the output device once and
     /// reuses it, rather than asking CoreAudio to look it up for every
     /// individual read and write.
-    /// Nudge the system volume from outside the event tap, e.g. scrolling
-    /// sideways on the closed notch. Shows the same HUD as the volume keys.
-    @discardableResult
-    func nudgeVolume(by delta: Float) -> Bool {
-        adjustVolume(by: delta)
-    }
-
     private func adjustVolume(by delta: Float) -> Bool {
         guard let device = SystemAudio.defaultOutputDevice,
               let current = SystemAudio.volume(of: device)

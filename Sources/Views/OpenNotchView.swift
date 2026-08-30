@@ -181,9 +181,18 @@ struct NotchHomeView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            AlbumArtwork()
-            PlayerControls()
-                .frame(minWidth: 170)
+            // With nothing playing, the artwork and transport are an empty
+            // rectangle with a placeholder note in it. Weather is a better use
+            // of the same space, and it goes away the moment music starts.
+            if music.track.isEmpty, settings.showWeatherWhenIdle {
+                WeatherPane()
+                    .frame(minWidth: 232, maxWidth: .infinity)
+                    .frame(height: 96)
+            } else {
+                AlbumArtwork()
+                PlayerControls()
+                    .frame(minWidth: 170)
+            }
 
             if settings.showCalendar {
                 CalendarPane()
