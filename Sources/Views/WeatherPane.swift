@@ -27,49 +27,11 @@ struct WeatherPane: View {
             PixelWeatherView(scene: scene)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(spacing: 0) {
-                content
-                    .padding(.horizontal, 14)
-
-                if weather.conditions != nil {
-                    daylight
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                }
-            }
+            content
+                .padding(.horizontal, 14)
         }
         .onAppear { weather.addSubscriber() }
         .onDisappear { weather.removeSubscriber() }
-    }
-
-    /// The day's arc, with the times it turns.
-    @ViewBuilder
-    private var daylight: some View {
-        VStack(spacing: 2) {
-            PixelDaylightGraph(
-                sunrise: weather.conditions?.sunrise,
-                sunset: weather.conditions?.sunset,
-                accent: scene.accent
-            )
-            .frame(height: 40)
-
-            HStack {
-                label(icon: "sunrise", date: weather.conditions?.sunrise)
-                Spacer()
-                label(icon: "sunset", date: weather.conditions?.sunset)
-            }
-        }
-    }
-
-    private func label(icon: String, date: Date?) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 8, weight: .medium))
-            Text(date.map { $0.formatted(date: .omitted, time: .shortened) } ?? "—")
-                .font(.system(size: 9, weight: .medium))
-                .monospacedDigit()
-        }
-        .foregroundStyle(.white.opacity(0.42))
     }
 
     @ViewBuilder
