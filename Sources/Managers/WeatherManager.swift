@@ -189,17 +189,47 @@ final class WeatherManager: NSObject, ObservableObject {
 
     /// Asks for access, or sends the user to Privacy settings if they already
     /// said no — macOS will not ask twice.
+    ///
+    /// Two things have to be true for the prompt to actually appear, and this
+    /// button did neither:
+    ///
+    /// 1. The app has to be frontmost. FunNotch is `LSUIElement` and the notch
+    ///    is a non-activating panel, so clicking anything in it leaves the app
+    ///    in the background, and macOS will not raise a TCC dialog for an app
+    ///    the user is not looking at.
+    /// 2. Something has to actually want a location. `requestWhenInUseAuthorization()`
+    ///    registers the intent, but the system raises the dialog when a
+    ///    location is requested — and `refresh()` deliberately returns early
+    ///    while unauthorised, so nothing ever asked.
     func requestAccess() {
         switch authorization {
         case .notDetermined:
+            NSApp.activate(ignoringOtherApps: true)
             locationManager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
-            if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocationServices") {
-                NSWorkspace.shared.open(url)
+            // This is what puts the dialog on screen.
+            locationManager.requestLocation()
+
+            // If the prompt never appears — Location Services off globally, or
+            // the app already sitting denied in a state we cannot read — the
+            // user is left staring at a button that did nothing. Give them the
+            // manual route instead of leaving them stuck.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.authorization == .notDetermined else { return }
+                    self.openLocationSettings()
+                }
             }
+        case .denied, .restricted:
+            openLocationSettings()
         default:
             refresh()
         }
+    }
+
+    /// Opens Privacy & Security › Location Services.
+    func openLocationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocationServices") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -226,7 +256,14 @@ extension WeatherManager: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         DispatchQueue.main.async {
-            MainActor.assumeIsolated { self.lastError = "Location unavailable" }
+            MainActor.assumeIsolated {
+                // While the authorisation prompt is still on screen the request
+                // that raised it fails by design. Reporting that as "location
+                // unavailable" would tell the user it is broken at exactly the
+                // moment they are being asked to allow it.
+                guard self.authorization != .notDetermined else { return }
+                self.lastError = "Location unavailable"
+            }
         }
     }
 }
