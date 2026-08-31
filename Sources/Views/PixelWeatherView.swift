@@ -111,15 +111,84 @@ struct PixelWeatherView: View {
     }
 
     private func draw(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
+        // Behind everything: the weather happens in front of the landscape.
+        drawLandscape(&ctx, size: size)
+
         switch scene {
-        case .clearDay:   drawSun(&ctx, size: size, t: t)
-        case .clearNight: drawStars(&ctx, size: size, t: t)
+        case .clearDay:
+            // A couple of clouds drifting past, in neutral grey rather than the
+            // scene's yellow. Drawn first so the sun sits in front of them.
+            drawClouds(&ctx, size: size, t: t, density: 3,
+                       tint: Color(white: 0.88), alphaScale: 1.35)
+            drawSun(&ctx, size: size, t: t)
+        case .clearNight:
+            drawClouds(&ctx, size: size, t: t, density: 3,
+                       tint: Color(white: 0.78), alphaScale: 0.9)
+            drawStars(&ctx, size: size, t: t)
         case .cloudy:     drawClouds(&ctx, size: size, t: t, density: 4)
         case .fog:        drawFog(&ctx, size: size, t: t)
         case .drizzle:    drawRain(&ctx, size: size, t: t, count: 14, speed: 34, length: 2, slant: 0.10)
         case .rain:       drawRain(&ctx, size: size, t: t, count: 30, speed: 74, length: 3, slant: 0.18)
         case .storm:      drawStorm(&ctx, size: size, t: t)
         case .snow:       drawSnow(&ctx, size: size, t: t)
+        }
+    }
+
+    // MARK: - Landscape
+    //
+    // Two ridges across the bottom: a far one, dim and higher, and a near one
+    // drawn solid. Rain and snow land on the near ridge rather than falling
+    // through the floor of the panel, which is the whole reason it is here.
+
+    /// Neutral rather than the scene colour. Tinting the ground with the accent
+    /// turned a clear day into a bright yellow desert, and it made the accent
+    /// coloured rain splashes invisible against the thing they land on.
+    private var groundColour: Color { Color(white: 0.80) }
+
+    /// Height of the near ridge at a given x, as a y coordinate.
+    ///
+    /// Deliberately shallow. The first version rose about a quarter of the way
+    /// up the panel and buried the place name underneath it; this is a horizon
+    /// for the weather to land on, not scenery in its own right.
+    private func groundY(_ x: CGFloat, _ size: CGSize) -> CGFloat {
+        let base = size.height - cell
+        // Two waves of different periods so the profile does not repeat
+        // visibly across a panel this wide.
+        let a = sin(Double(x) * 0.055) * 1.1
+        let b = sin(Double(x) * 0.021 + 1.3) * 1.6
+        return base - CGFloat((a + b + 2.8).rounded()) * cell / 2
+    }
+
+    /// The far ridge sits above the near one and never has anything land on it.
+    private func farGroundY(_ x: CGFloat, _ size: CGSize) -> CGFloat {
+        let base = size.height - cell * 2
+        let a = sin(Double(x) * 0.032 + 2.1) * 1.4
+        let b = sin(Double(x) * 0.013 + 0.4) * 1.0
+        return base - CGFloat((a + b + 2.4).rounded()) * cell / 2
+    }
+
+    private func drawLandscape(_ ctx: inout GraphicsContext, size: CGSize) {
+        var x: CGFloat = 0
+        while x < size.width {
+            var y = farGroundY(x, size)
+            while y < size.height {
+                px(&ctx, snap(x, y, 1, 1), groundColour, 0.07)
+                y += cell
+            }
+            x += cell
+        }
+
+        x = 0
+        while x < size.width {
+            let top = groundY(x, size)
+            var y = top
+            while y < size.height {
+                // The lip of the ridge is brighter than its body, which is what
+                // separates it from the far one without needing an outline.
+                px(&ctx, snap(x, y, 1, 1), groundColour, y < top + cell ? 0.30 : 0.13)
+                y += cell
+            }
+            x += cell
         }
     }
 
@@ -137,7 +206,17 @@ struct PixelWeatherView: View {
             // Wind pushes the whole column sideways as it descends.
             let x = CGFloat(lane) * size.width + CGFloat(fall) * CGFloat(slant)
             let wrappedX = x.truncatingRemainder(dividingBy: size.width)
-            px(&ctx, snap(wrappedX, y, 1, length), scene.accent, 0.30 + hash01(i) * 0.45)
+            let ground = groundY(wrappedX, size)
+
+            if y + length * cell < ground {
+                px(&ctx, snap(wrappedX, y, 1, length), scene.accent, 0.30 + hash01(i) * 0.45)
+            } else if y < ground + cell * 2 {
+                // Landed. A single pixel hopping off the ridge, brightest at
+                // the moment of impact and gone a few frames later.
+                let age = (y - ground) / (cell * 2)
+                px(&ctx, snap(wrappedX - cell, ground - cell, 1, 1), scene.accent, 0.55 * (1 - Double(age)))
+                px(&ctx, snap(wrappedX + cell, ground - cell, 1, 1), scene.accent, 0.55 * (1 - Double(age)))
+            }
         }
     }
 
@@ -151,11 +230,14 @@ struct PixelWeatherView: View {
             // A slow sideways drift, different per flake, reads as tumbling.
             let drift = sin(t * (0.5 + hash01(i * 23) * 0.8) + Double(i)) * 5
             let x = CGFloat(lane) * size.width + CGFloat(drift)
+            guard y < groundY(x, size) else { continue }
             px(&ctx, snap(x, y, 1, 1), scene.accent, 0.45 + hash01(i * 2) * 0.45)
         }
     }
 
-    private func drawClouds(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval, density: Int) {
+    private func drawClouds(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval,
+                            density: Int, tint: Color? = nil, alphaScale: Double = 1) {
+        let colour = tint ?? scene.accent
         for i in 0 ..< density {
             let speed = 5 + hash01(i * 31) * 6
             // Spread the band each cloud occupies rather than picking a random
@@ -176,8 +258,8 @@ struct PixelWeatherView: View {
             let alpha = 0.16 + hash01(i * 7) * 0.16
 
             // A cloud is a fat bar with a shorter bar stacked on top.
-            px(&ctx, snap(x, y + cell, CGFloat(width), 2), scene.accent, alpha)
-            px(&ctx, snap(x + cell * 2, y, CGFloat(width) - 4, 1), scene.accent, alpha)
+            px(&ctx, snap(x, y + cell, CGFloat(width), 2), colour, alpha * alphaScale)
+            px(&ctx, snap(x + cell * 2, y, CGFloat(width) - 4, 1), colour, alpha * alphaScale)
         }
     }
 
