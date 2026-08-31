@@ -57,11 +57,6 @@ struct WeatherPane: View {
                 }
 
                 Spacer(minLength: 0)
-
-                Image(systemName: weather.symbolName)
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(scene.accent.opacity(0.9))
-                    .shadow(color: scene.accent.opacity(0.35), radius: 8)
             }
         } else {
             // No reading yet: either location was refused, or the first fetch

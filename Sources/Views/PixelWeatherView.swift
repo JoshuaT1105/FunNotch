@@ -195,33 +195,83 @@ struct PixelWeatherView: View {
     }
 
     private func drawSun(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
-        let cx = size.width * 0.5
-        let cy = size.height * 0.5
+        // Sits where the weather icon used to, so the text has the left half
+        // to itself. There was an SF Symbol sun here as well as this one, which
+        // meant two suns in one small panel.
+        let cx = size.width * 0.80
+        let cy = size.height * 0.46
+
         // A blocky disc: rows of differing width, which is how a circle looks
-        // once you only have whole pixels to spend.
-        let widths: [CGFloat] = [3, 5, 7, 7, 5, 3]
+        // when you only have whole pixels to spend. Wider than it is tall by a
+        // row, because the grid is square but the eye is not.
+        let widths: [CGFloat] = [4, 6, 8, 8, 8, 6, 4]
         for (row, w) in widths.enumerated() {
-            let y = cy - cell * 3 + CGFloat(row) * cell
-            px(&ctx, snap(cx - w * cell / 2, y, w, 1), scene.accent, 0.85)
+            let y = cy - cell * 3.5 + CGFloat(row) * cell
+            px(&ctx, snap(cx - w * cell / 2, y, w, 1), scene.accent, 0.92)
         }
-        // Rays breathe in and out rather than spin: rotation on a pixel grid
-        // stairsteps horribly at this size.
-        let pulse = (sin(t * 1.6) + 1) / 2
-        let reach = cell * (4 + CGFloat(pulse) * 2)
-        for angle in stride(from: 0.0, to: .pi * 2, by: .pi / 4) {
-            let x = cx + CGFloat(cos(angle)) * reach
-            let y = cy + CGFloat(sin(angle)) * reach
-            px(&ctx, snap(x, y, 1, 1), scene.accent, 0.35 + pulse * 0.4)
+        // A dimmer ring just outside the disc reads as heat haze and stops the
+        // edge looking cut out.
+        for (row, w) in [CGFloat(2), 4, 6, 6, 6, 4, 2].enumerated() {
+            let y = cy - cell * 4.5 + CGFloat(row) * cell
+            px(&ctx, snap(cx - w * cell / 2 - cell, y, 1, 1), scene.accent, 0.22)
+            px(&ctx, snap(cx + w * cell / 2, y, 1, 1), scene.accent, 0.22)
+        }
+
+        // Eight rays that breathe in and out. Rotation stairsteps horribly on a
+        // grid this coarse, so they pulse instead — and the diagonals lag the
+        // straight ones so the whole thing does not throb as one lump.
+        let axes: [(Double, Double, Double)] = [
+            (0, 1, 0), (.pi / 2, 0, 1), (.pi, -1, 0), (3 * .pi / 2, 0, -1),
+            (.pi / 4, 0.7, 0.7), (3 * .pi / 4, -0.7, 0.7),
+            (5 * .pi / 4, -0.7, -0.7), (7 * .pi / 4, 0.7, -0.7)
+        ]
+        for (index, axis) in axes.enumerated() {
+            let diagonal = index >= 4
+            let phase = diagonal ? 0.9 : 0.0
+            let pulse = (sin(t * 1.9 + phase) + 1) / 2
+            let inner = cell * 5.5
+            let length = cell * (diagonal ? 1.5 : 2.5) * CGFloat(0.6 + pulse * 0.8)
+
+            var travelled: CGFloat = 0
+            while travelled < length {
+                let d = inner + travelled
+                let x = cx + CGFloat(axis.1) * d
+                let y = cy + CGFloat(axis.2) * d
+                px(&ctx, snap(x, y, 1, 1), scene.accent, 0.30 + pulse * 0.55)
+                travelled += cell
+            }
         }
     }
 
     private func drawStars(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
+        drawMoon(&ctx, size: size, t: t)
         for i in 0 ..< 18 {
             let x = hash01(i * 43 + 1) * Double(size.width)
             let y = hash01(i * 61 + 7) * Double(size.height)
             // Each star twinkles on its own clock.
             let twinkle = (sin(t * (0.8 + hash01(i * 3) * 1.6) + Double(i) * 1.7) + 1) / 2
             px(&ctx, snap(CGFloat(x), CGFloat(y), 1, 1), scene.accent, 0.20 + twinkle * 0.70)
+        }
+    }
+
+    /// A crescent: the disc with a second disc punched out of it by drawing the
+    /// background over the top, which is how you cut a shape when all you have
+    /// is filled rectangles.
+    private func drawMoon(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
+        let cx = size.width * 0.80
+        let cy = size.height * 0.46
+        // Only the lit sliver is drawn. Punching the bite out with black looked
+        // right on paper and wrong on screen: the panel is translucent, so
+        // "black" is a visible dark blob rather than a hole.
+        let widths: [CGFloat] = [4, 6, 8, 8, 8, 6, 4]
+        let bites: [CGFloat] = [3, 5, 6, 6, 6, 5, 3]
+        for (row, w) in widths.enumerated() {
+            let y = cy - cell * 3.5 + CGFloat(row) * cell
+            let discLeft = cx - w * cell / 2
+            let biteLeft = cx - bites[row] * cell / 2 + cell * 2
+            let lit = (biteLeft - discLeft) / cell
+            guard lit >= 1 else { continue }
+            px(&ctx, snap(discLeft, y, lit.rounded(.down), 1), scene.accent, 0.85)
         }
     }
 
