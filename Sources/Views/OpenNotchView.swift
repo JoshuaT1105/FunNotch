@@ -30,6 +30,8 @@ struct OpenNotchView: View {
                     FocusView()
                 case .notes:
                     NotesView()
+                case .timer:
+                    TimerView()
                 case .game:
                     // Belt and braces: the tab is already gone from the header
                     // during a session, but nothing should be able to land here
@@ -131,6 +133,7 @@ struct NotchHeader: View {
             case .shelf: return settings.shelfEnabled
             case .clipboard: return settings.clipboardHistoryEnabled
             case .notes: return settings.showNotes
+            case .timer: return settings.showTimer
             // A focus session is a promise not to get distracted, and a game in
             // the notch is the most distracting thing in here.
             case .game: return settings.showGame && !FocusManager.shared.isActive

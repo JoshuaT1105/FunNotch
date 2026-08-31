@@ -151,12 +151,8 @@ private struct QuickActionsPanel: View {
                 task.arguments = ["-i", "-c"]
                 try? task.run()
             }
-            action("moon.fill", "Do Not Disturb") {
-                // Focus modes cannot be set directly by an app, so this opens
-                // the Control Center pane where it lives.
-                if let url = URL(string: "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension") {
-                    NSWorkspace.shared.open(url)
-                }
+            action("timer", "Timer", tint: TimerManager.shared.isActive ? .green : nil) {
+                viewModel.currentTab = .timer
             }
         }
     }
@@ -210,42 +206,76 @@ private struct SystemStatsPanel: View {
 
 // MARK: - Battery
 
+/// Battery as a pixel cell meter.
+///
+/// Colour carries the state, because at this size a percentage alone is
+/// something you have to read rather than notice: green when healthy, amber
+/// low, red critical, yellow in Low Power Mode, and a filling sweep while it
+/// charges.
+private enum BatteryState {
+    case charging, charged, low, critical, lowPower, normal
+
+    var tint: Color {
+        switch self {
+        case .charging: return Color(red: 0.35, green: 0.90, blue: 0.45)
+        case .charged:  return Color(red: 0.45, green: 0.85, blue: 0.55)
+        case .low:      return Color(red: 1.00, green: 0.68, blue: 0.20)
+        case .critical: return Color(red: 1.00, green: 0.35, blue: 0.32)
+        case .lowPower: return Color(red: 1.00, green: 0.84, blue: 0.25)
+        case .normal:   return Color(red: 0.82, green: 0.86, blue: 0.92)
+        }
+    }
+}
+
 private struct BatteryPanel: View {
     @ObservedObject private var battery = BatteryManager.shared
 
+    private var state: BatteryState {
+        if battery.isCharged { return .charged }
+        if battery.isCharging { return .charging }
+        if battery.isLowPowerMode { return .lowPower }
+        if battery.level <= 0.10 { return .critical }
+        if battery.level <= 0.20 { return .low }
+        return .normal
+    }
+
     private var detail: String {
-        if battery.isCharged { return "Charged" }
+        if battery.isCharging {
+            // The real draw beats the adapter's rating: a 96 W brick topping up
+            // a nearly full battery delivers a couple of watts.
+            if let watts = battery.chargeWatts, watts >= 0.5 {
+                return String(format: "%.0f W in", watts)
+            }
+            if let minutes = battery.timeRemaining, minutes > 0 {
+                return "\(minutes / 60)h \(minutes % 60)m to full"
+            }
+            return "Charging"
+        }
+        if battery.isCharged {
+            return battery.adapterWatts.map { "Charged · \($0) W" } ?? "Charged"
+        }
+        if battery.isLowPowerMode { return "Low Power Mode" }
         if let minutes = battery.timeRemaining, minutes > 0 {
             let hours = minutes / 60
-            let rest = minutes % 60
-            let time = hours > 0 ? "\(hours)h \(rest)m" : "\(rest)m"
-            return battery.isCharging ? "\(time) to full" : "\(time) left"
+            return hours > 0 ? "\(hours)h \(minutes % 60)m left" : "\(minutes)m left"
         }
-        if battery.isCharging { return "Charging" }
-        if battery.isPluggedIn { return "Plugged in" }
-        return "On battery"
+        return battery.isPluggedIn ? "Plugged in" : "On battery"
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            PanelLabel(text: "Battery")
+        VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
+                PanelLabel(text: "Battery")
+                Spacer(minLength: 0)
                 Text("\(Int(battery.level * 100))%")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.92))
-                if battery.isCharging {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.green)
-                }
-                if battery.isLowPowerMode {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.yellow)
-                        .help("Low Power Mode")
-                }
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(state.tint)
             }
+
+            PixelBatteryMeter(level: Double(battery.level), state: state,
+                              isCharging: battery.isCharging)
+                .frame(height: 13)
+
             Text(detail)
                 .font(.system(size: 8.5))
                 .foregroundStyle(.white.opacity(0.45))
@@ -253,6 +283,66 @@ private struct BatteryPanel: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { battery.start() }
+    }
+}
+
+/// A blocky cell meter: an outline, a terminal nub, and whole cells of charge.
+private struct PixelBatteryMeter: View {
+    let level: Double
+    let state: BatteryState
+    let isCharging: Bool
+
+    private let cells = 10
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { context in
+            Canvas { ctx, size in
+                let t = context.date.timeIntervalSinceReferenceDate
+                let cell: CGFloat = 2
+                let nub: CGFloat = cell
+                let bodyWidth = size.width - nub - cell
+                let cellWidth = (bodyWidth - cell * 2) / CGFloat(cells)
+
+                func fill(_ r: CGRect, _ c: Color, _ o: Double) {
+                    ctx.fill(Path(r), with: .color(c.opacity(o)))
+                }
+
+                // Outline, drawn as four bars so the corners stay square.
+                let outline = CGRect(x: 0, y: 0, width: bodyWidth, height: size.height)
+                fill(CGRect(x: 0, y: 0, width: bodyWidth, height: cell), .white, 0.30)
+                fill(CGRect(x: 0, y: size.height - cell, width: bodyWidth, height: cell), .white, 0.30)
+                fill(CGRect(x: 0, y: 0, width: cell, height: size.height), .white, 0.30)
+                fill(CGRect(x: bodyWidth - cell, y: 0, width: cell, height: size.height), .white, 0.30)
+                // Terminal.
+                fill(CGRect(x: bodyWidth, y: size.height / 3, width: nub, height: size.height / 3), .white, 0.30)
+
+                let filled = Int((level * Double(cells)).rounded())
+                for i in 0 ..< cells {
+                    let x = cell + CGFloat(i) * cellWidth
+                    let rect = CGRect(x: x + 0.5, y: cell + 1,
+                                      width: cellWidth - 1, height: size.height - cell * 2 - 2)
+                    if i < filled {
+                        var opacity = 0.95
+                        if isCharging {
+                            // A brighter cell running left to right, so charging
+                            // reads as motion rather than a static green bar.
+                            let head = Int(t * 6).quotientAndRemainder(dividingBy: max(filled, 1)).remainder
+                            if i == head { opacity = 1.0 } else { opacity = 0.55 }
+                        } else if state == .critical {
+                            // A slow pulse: urgent without being a strobe.
+                            opacity = 0.45 + (sin(t * 3.2) + 1) / 2 * 0.5
+                        }
+                        fill(rect, state.tint, opacity)
+                    } else if isCharging, i == filled {
+                        // The cell about to fill, ghosted in.
+                        fill(rect, state.tint, 0.18 + (sin(t * 3) + 1) / 2 * 0.18)
+                    } else {
+                        fill(rect, .white, 0.06)
+                    }
+                }
+                _ = outline
+            }
+        }
     }
 }
 

@@ -8,6 +8,7 @@
 
 import AppKit
 import Combine
+import IOKit
 import IOKit.ps
 import SwiftUI
 
@@ -23,6 +24,13 @@ final class BatteryManager: ObservableObject {
     @Published private(set) var hasBattery = false
     /// Minutes remaining, or nil while the estimate is still being calculated.
     @Published private(set) var timeRemaining: Int?
+
+    /// How fast the battery is actually taking charge, in watts. This is the
+    /// real draw, not the adapter's rating: a 96 W brick charging a nearly full
+    /// battery delivers a couple of watts, and reporting 96 would be a lie.
+    @Published private(set) var chargeWatts: Double?
+    /// What the connected adapter is rated for, in watts.
+    @Published private(set) var adapterWatts: Int?
 
     private var runLoopSource: CFRunLoopSource?
     private var timer: Timer?
@@ -65,6 +73,50 @@ final class BatteryManager: ObservableObject {
         refresh(announce: false)
     }
 
+    /// Instantaneous charge power straight from the SMC-backed battery service.
+    /// `IOPowerSources` does not carry it, so this drops to IOKit directly.
+    private func readChargeRate() {
+        guard isPluggedIn else {
+            chargeWatts = nil
+            adapterWatts = nil
+            return
+        }
+
+        let service = IOServiceGetMatchingService(
+            kIOMainPortDefault,
+            IOServiceMatching("AppleSmartBattery")
+        )
+        guard service != 0 else {
+            chargeWatts = nil
+            adapterWatts = nil
+            return
+        }
+        defer { IOObjectRelease(service) }
+
+        func number(_ key: String) -> Double? {
+            guard let value = IORegistryEntryCreateCFProperty(
+                service, key as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue() as? NSNumber else { return nil }
+            return value.doubleValue
+        }
+
+        if let details = IORegistryEntryCreateCFProperty(
+            service, "AdapterDetails" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any] {
+            adapterWatts = (details["Watts"] as? NSNumber)?.intValue
+        } else {
+            adapterWatts = nil
+        }
+
+        // Millivolts times milliamps is microwatts. Amperage is signed:
+        // negative while discharging, which is not a charge rate.
+        if let millivolts = number("Voltage"), let milliamps = number("Amperage"), milliamps > 0 {
+            chargeWatts = millivolts * milliamps / 1_000_000
+        } else {
+            chargeWatts = nil
+        }
+    }
+
     func refresh(announce: Bool = true) {
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
@@ -93,6 +145,8 @@ final class BatteryManager: ObservableObject {
 
             break
         }
+
+        readChargeRate()
 
         guard announce else {
             lastPluggedState = isPluggedIn

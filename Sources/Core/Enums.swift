@@ -33,6 +33,7 @@ enum NotchTab: String, CaseIterable, Identifiable {
     case clipboard = "Clipboard"
     case focus = "Focus"
     case notes = "Notes"
+    case timer = "Timer"
     case game = "Game"
 
     var id: String { rawValue }
@@ -44,6 +45,7 @@ enum NotchTab: String, CaseIterable, Identifiable {
         case .clipboard: return "doc.on.clipboard.fill"
         case .focus: return "cup.and.saucer.fill"
         case .notes: return "note.text"
+        case .timer: return "timer"
         case .game: return "gamecontroller.fill"
         }
     }

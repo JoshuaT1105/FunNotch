@@ -107,6 +107,18 @@ enum PreviewRenderer {
             viewModel.currentTab = .focus
         }))
 
+        scenes.append(("open-timer", { viewModel in
+            TimerManager.shared.start(seconds: 600)
+            viewModel.previewOpen()
+            viewModel.currentTab = .timer
+        }))
+
+        scenes.append(("open-stopwatch", { viewModel in
+            TimerManager.shared.injectPreviewStopwatch(elapsed: 74.32, laps: [61.08, 32.55])
+            viewModel.previewOpen()
+            viewModel.currentTab = .timer
+        }))
+
         scenes.append(("open-clipboard", { viewModel in
             ClipboardManager.shared.injectPreviewEntries([
                 (.text("https://developer.apple.com/documentation/appkit/nspasteboard"), "Safari"),

@@ -815,6 +815,12 @@ final class Settings: ObservableObject {
         set { write("showWeatherWhenIdle", newValue) }
     }
 
+    /// The Timer tab: countdowns and a stopwatch.
+    var showTimer: Bool {
+        get { bool("showTimer", true) }
+        set { write("showTimer", newValue) }
+    }
+
     /// The Notes scratchpad tab. On by default: it is the single most
     /// requested notch feature and it costs one tab.
     var showNotes: Bool {
