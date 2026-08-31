@@ -31,8 +31,8 @@ cd "$(dirname "$0")"
 
 APP_NAME="FunNotch"
 BUNDLE_ID="com.funnotch.FunNotch"
-VERSION="1.0.2"
-BUILD_NUMBER="3"
+VERSION="1.1"
+BUILD_NUMBER="4"
 MIN_MACOS="14.0"
 
 BUILD_DIR="build"

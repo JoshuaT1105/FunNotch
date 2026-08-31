@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>FunNotch</title>
+        <item>
+            <title>1.1</title>
+            <pubDate>Sun, 30 Aug 2026 21:29:59 -0500</pubDate>
+            <link>https://funnotch.xyz</link>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.1/FunNotch-1.1.dmg" length="4306381" type="application/octet-stream" sparkle:edSignature="0+LlAZHnaOmSaIqMt5TIiUm87X4S2XvDxroRAKFMecGu/A8vbPpx2d6MYLJa0p3hHad4sZGCde6qs5NIDhq9AA=="/>
+        </item>
+    </channel>
+</rss>
