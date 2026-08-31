@@ -187,7 +187,7 @@ struct NotchHomeView: View {
             if music.track.isEmpty, settings.showWeatherWhenIdle {
                 WeatherPane()
                     .frame(minWidth: 232, maxWidth: .infinity)
-                    .frame(height: 96)
+                    .frame(height: 148)
             } else {
                 AlbumArtwork()
                 PlayerControls()

@@ -25,6 +25,11 @@ final class WeatherManager: NSObject, ObservableObject {
         var weatherCode: Int
         var isDay: Bool
         var placeName: String?
+        /// Today's sunrise and sunset in local time. Nil when the API omitted
+        /// them, which happens above the Arctic circle in midsummer and
+        /// midwinter — there is genuinely no sunrise to report.
+        var sunrise: Date?
+        var sunset: Date?
     }
 
     @Published private(set) var conditions: Conditions?
@@ -113,6 +118,8 @@ final class WeatherManager: NSObject, ObservableObject {
             URLQueryItem(name: "latitude", value: String(format: "%.3f", latitude)),
             URLQueryItem(name: "longitude", value: String(format: "%.3f", longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day"),
+            URLQueryItem(name: "daily", value: "sunrise,sunset"),
+            URLQueryItem(name: "forecast_days", value: "1"),
             URLQueryItem(name: "timezone", value: "auto"),
         ]
         guard let url = components.url else { return }
@@ -132,7 +139,12 @@ final class WeatherManager: NSObject, ObservableObject {
                     let weather_code: Int
                     let is_day: Int
                 }
+                struct Daily: Decodable {
+                    let sunrise: [String]
+                    let sunset: [String]
+                }
                 let current: Current
+                let daily: Daily?
             }
 
             guard let decoded = try? JSONDecoder().decode(Response.self, from: data) else { return }
@@ -143,7 +155,9 @@ final class WeatherManager: NSObject, ObservableObject {
                         temperatureCelsius: decoded.current.temperature_2m,
                         weatherCode: decoded.current.weather_code,
                         isDay: decoded.current.is_day == 1,
-                        placeName: self.conditions?.placeName
+                        placeName: self.conditions?.placeName,
+                        sunrise: Self.parseLocalTime(decoded.daily?.sunrise.first),
+                        sunset: Self.parseLocalTime(decoded.daily?.sunset.first)
                     )
                 }
             }
@@ -156,6 +170,18 @@ final class WeatherManager: NSObject, ObservableObject {
                 MainActor.assumeIsolated { self?.conditions?.placeName = name }
             }
         }
+    }
+
+    /// Open-Meteo returns local wall-clock time with no offset when asked for
+    /// `timezone=auto` ("2026-08-30T06:41"), so it is parsed in the current
+    /// time zone rather than UTC.
+    private static func parseLocalTime(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return formatter.date(from: value)
     }
 
     // MARK: - Presentation
