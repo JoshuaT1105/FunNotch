@@ -273,3 +273,52 @@ enum RepeatMode: String {
         self == .one ? "1" : nil
     }
 }
+
+/// A module in the strip along the bottom of the home tab. The strip is
+/// user-composed the same way the idle widgets are: pick which ones appear and
+/// in what order, because what is useful here is entirely personal.
+enum HomePanel: String, CaseIterable, Identifiable {
+    case quickActions = "Quick actions"
+    case systemStats = "System stats"
+    case battery = "Battery"
+    case devices = "Device batteries"
+    case focusStreak = "Focus streak"
+    case recentShelf = "Recent files"
+    case clipboard = "Last copied"
+    case notes = "Note"
+    case wifi = "Wi-Fi"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .quickActions: return "bolt.fill"
+        case .systemStats:  return "waveform.path.ecg"
+        case .battery:      return "battery.75"
+        case .devices:      return "airpods"
+        case .focusStreak:  return "flame.fill"
+        case .recentShelf:  return "tray.full"
+        case .clipboard:    return "doc.on.clipboard"
+        case .notes:        return "note.text"
+        case .wifi:         return "wifi"
+        }
+    }
+
+    /// Roughly how much of the strip this one wants. The strip divides the
+    /// width in proportion to these rather than equally, because a row of
+    /// action buttons needs far more room than a battery percentage.
+    var weight: CGFloat {
+        switch self {
+        case .quickActions: return 1.5
+        case .systemStats:  return 1.4
+        case .recentShelf:  return 1.3
+        case .clipboard:    return 1.6
+        case .notes:        return 1.6
+        case .devices:      return 1.2
+        case .battery:      return 1.0
+        case .focusStreak:  return 1.0
+        case .wifi:         return 1.0
+        }
+    }
+}
+

@@ -180,6 +180,15 @@ struct NotchHomeView: View {
     @ObservedObject private var music = MusicManager.shared
 
     var body: some View {
+        VStack(spacing: 8) {
+            main
+            HomeStripView()
+                .frame(height: 46)
+        }
+        .padding(.top, 10)
+    }
+
+    private var main: some View {
         HStack(alignment: .top, spacing: 14) {
             // With nothing playing, the artwork and transport are an empty
             // rectangle with a placeholder note in it. Weather is a better use
@@ -204,7 +213,6 @@ struct NotchHomeView: View {
                     .frame(width: 96)
             }
         }
-        .padding(.top, 10)
     }
 }
 

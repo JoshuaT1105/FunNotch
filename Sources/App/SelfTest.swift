@@ -304,6 +304,12 @@ enum SelfTest {
                 detail: notes.fileURL.deletingLastPathComponent().lastPathComponent + "/Notes.txt"
             )
         }
+        // The backup exists precisely so the Desktop copy can be lost, so it is
+        // worth asserting separately rather than trusting one write.
+        let backup = try? String(contentsOf: notes.backupURL(for: notes.day), encoding: .utf8)
+        check("the note is mirrored inside the app", backup == notes.text,
+              detail: notes.backupFolder.lastPathComponent)
+
         notes.text = notesBefore
         notes.saveNow()
 

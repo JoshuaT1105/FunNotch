@@ -623,32 +623,37 @@ struct GameView: View {
 
     private var header: some View {
         HStack(spacing: 9) {
-            Text("Notch Breakout")
-                .font(.system(size: 11, weight: .semibold))
+            // Monospaced and upper case throughout: the arcade cabinets this
+            // is imitating had one font, and a proportional rounded face beside
+            // a pixel board looks like two different apps.
+            Text("NOTCH BREAKOUT")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(0.5)
                 .foregroundStyle(.white.opacity(0.9))
 
             Text("L\(game.level)")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.45))
 
-            HStack(spacing: 2) {
+            // Square pips rather than hearts, for the same reason.
+            HStack(spacing: 3) {
                 ForEach(0 ..< max(game.lives, 0), id: \.self) { _ in
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.pink.opacity(0.85))
+                    Rectangle()
+                        .fill(Color.pink.opacity(0.85))
+                        .frame(width: 5, height: 5)
                 }
             }
 
             Spacer(minLength: 0)
 
-            Text("\(game.score)")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+            Text(String(format: "%06d", game.score))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(.white)
 
-            Label("\(game.highScore)", systemImage: "crown.fill")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+            Text("HI \(String(format: "%06d", game.highScore))")
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(settings.accentColor)
         }
@@ -695,79 +700,112 @@ struct GameView: View {
         .allowsHitTesting(false)
     }
 
+    /// One "pixel" of the game's grid. Everything is snapped to it, so nothing
+    /// ever lands on a half pixel and the whole board reads as one resolution
+    /// rather than smooth shapes drawn small.
+    private static let px: CGFloat = 2
+
+    private func snap(_ rect: CGRect) -> CGRect {
+        let p = Self.px
+        let x = (rect.minX / p).rounded(.down) * p
+        let y = (rect.minY / p).rounded(.down) * p
+        return CGRect(
+            x: x, y: y,
+            width: max((rect.width / p).rounded() * p, p),
+            height: max((rect.height / p).rounded() * p, p)
+        )
+    }
+
+    private func fill(_ ctx: inout GraphicsContext, _ rect: CGRect, _ colour: Color, _ opacity: Double = 1) {
+        ctx.fill(Path(snap(rect)), with: .color(colour.opacity(opacity)))
+    }
+
     private func draw(in context: inout GraphicsContext, size: CGSize) {
+        let p = Self.px
+
         for brick in game.bricks {
             let colour = game.colour(forRow: brick.row)
-            context.fill(
-                Path(roundedRect: brick.frame, cornerRadius: 2.5),
-                with: .color(brick.hitPoints > 1 ? colour : colour.opacity(0.82))
-            )
+            let box = snap(brick.frame)
+            // Flat body, a lit top edge and a shaded bottom edge. That two-tone
+            // bevel is what makes a rectangle read as a block rather than a
+            // coloured smear, and it costs two extra fills.
+            fill(&context, box, colour, brick.hitPoints > 1 ? 1 : 0.85)
+            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), .white, 0.30)
+            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), .black, 0.30)
+
             if brick.hitPoints > 1 {
-                // Armoured bricks read as raised, so it is obvious which ones
-                // need a second hit.
-                context.fill(
-                    Path(roundedRect: brick.frame.insetBy(dx: 2.5, dy: 3), cornerRadius: 1.5),
-                    with: .color(.white.opacity(0.35))
-                )
+                // Armour is a pair of studs rather than an inset panel: legible
+                // at this size, and unmistakably pixel art.
+                let midY = box.midY - p / 2
+                fill(&context, CGRect(x: box.minX + p * 2, y: midY, width: p, height: p), .white, 0.75)
+                fill(&context, CGRect(x: box.maxX - p * 3, y: midY, width: p, height: p), .white, 0.75)
             }
         }
 
         for particle in game.particles {
-            let side: CGFloat = 2.4
-            context.fill(
-                Path(
-                    CGRect(
-                        x: particle.position.x - side / 2,
-                        y: particle.position.y - side / 2,
-                        width: side,
-                        height: side
-                    )
-                ),
-                with: .color(particle.color.opacity(min(particle.life * 2.4, 1)))
-            )
+            fill(&context,
+                 CGRect(x: particle.position.x - p / 2, y: particle.position.y - p / 2, width: p, height: p),
+                 particle.color, min(particle.life * 2.4, 1))
         }
 
         for powerup in game.powerups {
-            let box = CGRect(
-                x: powerup.position.x - 6,
-                y: powerup.position.y - 5,
-                width: 12,
-                height: 10
-            )
-            context.fill(Path(roundedRect: box, cornerRadius: 3), with: .color(powerup.kind.tint))
+            let box = snap(CGRect(x: powerup.position.x - 6, y: powerup.position.y - 5, width: 12, height: 10))
+            // A capsule at this size is mush. A square with a hard border and a
+            // dark inset reads instantly as a pickup.
+            fill(&context, box, powerup.kind.tint, 1)
+            fill(&context, box.insetBy(dx: p, dy: p), .black, 0.55)
             context.draw(
                 Text(powerup.kind.symbol)
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(.black),
-                at: powerup.position
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .foregroundStyle(powerup.kind.tint),
+                at: CGPoint(x: box.midX, y: box.midY)
             )
         }
 
-        let paddle = CGRect(
+        let paddleRect = snap(CGRect(
             x: game.paddleCenterX - game.paddleWidth / 2,
             y: game.paddleCenterY - BreakoutGame.paddleHeight / 2,
             width: game.paddleWidth,
             height: BreakoutGame.paddleHeight
-        )
-        context.fill(Path(roundedRect: paddle, cornerRadius: 2.5), with: .color(settings.accentColor))
+        ))
+        fill(&context, paddleRect, settings.accentColor, 1)
+        fill(&context, CGRect(x: paddleRect.minX, y: paddleRect.minY, width: paddleRect.width, height: p), .white, 0.45)
+        fill(&context, CGRect(x: paddleRect.maxX - p, y: paddleRect.minY, width: p, height: paddleRect.height), .black, 0.30)
+        fill(&context, CGRect(x: paddleRect.minX, y: paddleRect.maxY - p, width: paddleRect.width, height: p), .black, 0.30)
 
         for ball in game.balls {
-            let rect = CGRect(
-                x: ball.position.x - BreakoutGame.ballRadius,
-                y: ball.position.y - BreakoutGame.ballRadius,
-                width: BreakoutGame.ballRadius * 2,
-                height: BreakoutGame.ballRadius * 2
+            // A square ball. An anti-aliased circle four pixels across is a
+            // grey blob; a square is unambiguous and is what the machines this
+            // is imitating actually drew.
+            let r = BreakoutGame.ballRadius
+            let box = snap(CGRect(x: ball.position.x - r, y: ball.position.y - r, width: r * 2, height: r * 2))
+            fill(&context, box, .white, 1)
+            fill(&context, CGRect(x: box.minX, y: box.minY, width: p, height: p), .white, 1)
+            fill(&context, CGRect(x: box.maxX - p, y: box.maxY - p, width: p, height: p), .black, 0.35)
+        }
+
+        // Scanlines over the whole board. One dark row every third pixel, dim
+        // enough to be felt rather than seen.
+        var line: CGFloat = 0
+        while line < size.height {
+            context.fill(
+                Path(CGRect(x: 0, y: line, width: size.width, height: 1)),
+                with: .color(.black.opacity(0.09))
             )
-            context.fill(Path(ellipseIn: rect.insetBy(dx: -2, dy: -2)), with: .color(.white.opacity(0.18)))
-            context.fill(Path(ellipseIn: rect), with: .color(.white))
+            line += p * 2
         }
 
         if let banner = game.banner {
+            let centre = CGPoint(x: size.width / 2, y: size.height * 0.62)
+            let plate = CGRect(x: centre.x - 58, y: centre.y - 9, width: 116, height: 18)
+            fill(&context, plate, .black, 0.72)
+            fill(&context, CGRect(x: plate.minX, y: plate.minY, width: plate.width, height: Self.px), .white, 0.22)
+            fill(&context, CGRect(x: plate.minX, y: plate.maxY - Self.px, width: plate.width, height: Self.px), .white, 0.22)
             context.draw(
-                Text(banner)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.75)),
-                at: CGPoint(x: size.width / 2, y: size.height * 0.62)
+                Text(banner.uppercased())
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.9)),
+                at: centre
             )
         }
     }

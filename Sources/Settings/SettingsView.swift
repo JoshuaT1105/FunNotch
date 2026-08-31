@@ -280,6 +280,17 @@ private struct AppearanceSettings: View {
                 }
             }
 
+            Section("Home strip") {
+                Toggle("Show a strip along the bottom of the home tab", isOn: $settings.homeStripEnabled)
+                HomePanelListEditor(
+                    panels: Binding(
+                        get: { settings.homePanels },
+                        set: { settings.homePanels = $0 }
+                    )
+                )
+                .disabled(!settings.homeStripEnabled)
+            }
+
             Section("Beside the notch") {
                 Toggle("Show information while the notch is idle", isOn: $settings.idleWidgetsEnabled)
                 WidgetListEditor(
@@ -584,6 +595,76 @@ private struct WidgetListEditor: View {
     /// Offering the same widget twice on one side is never what you want.
     private var available: [NotchWidget] {
         NotchWidget.allCases.filter { !widgets.contains($0) }
+    }
+}
+
+private struct HomePanelListEditor: View {
+    @Binding var panels: [HomePanel]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Panels, left to right")
+                Spacer()
+                Menu {
+                    ForEach(available) { panel in
+                        Button {
+                            panels.append(panel)
+                        } label: {
+                            Label(panel.rawValue, systemImage: panel.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(available.isEmpty)
+            }
+
+            if panels.isEmpty {
+                Text("The strip is empty, so nothing is shown.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(panels.enumerated()), id: \.offset) { index, panel in
+                    HStack(spacing: 6) {
+                        Image(systemName: panel.symbol)
+                            .frame(width: 16)
+                            .foregroundStyle(.secondary)
+                        Text(panel.rawValue)
+                        Spacer()
+                        Button {
+                            panels.swapAt(index, index - 1)
+                        } label: { Image(systemName: "chevron.up") }
+                        .buttonStyle(.plain)
+                        .disabled(index == 0)
+                        Button {
+                            panels.swapAt(index, index + 1)
+                        } label: { Image(systemName: "chevron.down") }
+                        .buttonStyle(.plain)
+                        .disabled(index == panels.count - 1)
+                        Button {
+                            panels.remove(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .font(.callout)
+                }
+
+                Text("The strip divides its width between whatever is here, so three or four panels read better than eight.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var available: [HomePanel] {
+        HomePanel.allCases.filter { !panels.contains($0) }
     }
 }
 

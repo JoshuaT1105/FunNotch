@@ -23,6 +23,14 @@ final class SystemStatsManager: ObservableObject {
     @Published private(set) var diskUsage: Double = 0
     @Published private(set) var diskFreeBytes: Int64 = 0
 
+    /// Recent CPU and memory samples, oldest first, for the sparklines on the
+    /// home strip. Capped rather than unbounded: at one sample every three
+    /// seconds this is about two minutes of history, which is all a graph this
+    /// small can show anyway.
+    @Published private(set) var cpuHistory: [Double] = []
+    @Published private(set) var memoryHistory: [Double] = []
+    private let historyLimit = 48
+
     private var timer: Timer?
     private var previousTicks: (used: UInt64, total: UInt64)?
     /// Widgets are the only consumer, so polling stops when none are shown.
@@ -34,6 +42,9 @@ final class SystemStatsManager: ObservableObject {
     func addSubscriber() {
         subscribers += 1
         if subscribers == 1 { start() }
+        // A reading straight away, so opening the notch shows a value rather
+        // than an empty box until the three-second timer first fires.
+        if cpuHistory.isEmpty { refresh() }
     }
 
     func removeSubscriber() {
@@ -61,6 +72,14 @@ final class SystemStatsManager: ObservableObject {
         readCPU()
         readMemory()
         readDisk()
+        recordHistory()
+    }
+
+    private func recordHistory() {
+        cpuHistory.append(cpuUsage)
+        memoryHistory.append(memoryUsage)
+        if cpuHistory.count > historyLimit { cpuHistory.removeFirst(cpuHistory.count - historyLimit) }
+        if memoryHistory.count > historyLimit { memoryHistory.removeFirst(memoryHistory.count - historyLimit) }
     }
 
     // MARK: - CPU
