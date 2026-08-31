@@ -20,13 +20,14 @@ struct HomeStripView: View {
         let panels = settings.homePanels
         if settings.homeStripEnabled, !panels.isEmpty {
             GeometryReader { geo in
-                let total = panels.reduce(0) { $0 + $1.weight }
+                let total = panels.reduce(0) { $0 + $1.panel.weight }
                 HStack(spacing: 6) {
-                    ForEach(panels) { panel in
+                    ForEach(panels) { instance in
                         PanelChrome {
-                            view(for: panel)
+                            view(for: instance)
                         }
-                        .frame(width: (geo.size.width - CGFloat(panels.count - 1) * 6) * panel.weight / total)
+                        .frame(width: (geo.size.width - CGFloat(panels.count - 1) * 6)
+                               * instance.panel.weight / total)
                     }
                 }
             }
@@ -34,8 +35,9 @@ struct HomeStripView: View {
     }
 
     @ViewBuilder
-    private func view(for panel: HomePanel) -> some View {
-        switch panel {
+    private func view(for instance: HomePanelInstance) -> some View {
+        switch instance.panel {
+        case .openApp:      OpenAppPanel(path: instance.appPath)
         case .quickActions: QuickActionsPanel()
         case .systemStats:  SystemStatsPanel()
         case .battery:      BatteryPanel()
@@ -155,12 +157,6 @@ private struct QuickActionsPanel: View {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension") {
                     NSWorkspace.shared.open(url)
                 }
-            }
-            action("lock.fill", "Lock screen") {
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-                task.arguments = ["displaysleepnow"]
-                try? task.run()
             }
         }
     }
@@ -450,5 +446,55 @@ private struct WiFiPanel: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Open app
+
+/// A launcher for one chosen application. Several can sit in the strip, each
+/// pointing somewhere different, which is why panels carry a payload.
+private struct OpenAppPanel: View {
+    let path: String?
+
+    private var url: URL? { path.map { URL(fileURLWithPath: $0) } }
+
+    private var icon: NSImage? {
+        guard let url, FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    private var name: String {
+        url?.deletingPathExtension().lastPathComponent ?? "Choose…"
+    }
+
+    var body: some View {
+        Button {
+            guard let url else { return }
+            NSWorkspace.shared.openApplication(at: url, configuration: .init())
+        } label: {
+            VStack(spacing: 3) {
+                if let icon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 20, height: 20)
+                } else {
+                    // Set in Settings but since moved or uninstalled, or never
+                    // set at all. Either way, say so rather than showing a
+                    // button that does nothing.
+                    Image(systemName: "questionmark.app.dashed")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                Text(name)
+                    .font(.system(size: 8))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(icon == nil)
+        .help(icon == nil ? "Pick an app in Settings" : "Open \(name)")
     }
 }

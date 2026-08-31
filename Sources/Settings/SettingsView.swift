@@ -599,7 +599,7 @@ private struct WidgetListEditor: View {
 }
 
 private struct HomePanelListEditor: View {
-    @Binding var panels: [HomePanel]
+    @Binding var panels: [HomePanelInstance]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -609,7 +609,7 @@ private struct HomePanelListEditor: View {
                 Menu {
                     ForEach(available) { panel in
                         Button {
-                            panels.append(panel)
+                            panels.append(HomePanelInstance(panel: panel))
                         } label: {
                             Label(panel.rawValue, systemImage: panel.symbol)
                         }
@@ -627,12 +627,21 @@ private struct HomePanelListEditor: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(Array(panels.enumerated()), id: \.offset) { index, panel in
+                ForEach(Array(panels.enumerated()), id: \.element.id) { index, instance in
                     HStack(spacing: 6) {
-                        Image(systemName: panel.symbol)
+                        Image(systemName: instance.panel.symbol)
                             .frame(width: 16)
                             .foregroundStyle(.secondary)
-                        Text(panel.rawValue)
+                        Text(instance.panel.rawValue)
+
+                        if instance.panel == .openApp {
+                            Button(instance.appName ?? "Choose app…") {
+                                chooseApp(for: index)
+                            }
+                            .buttonStyle(.link)
+                            .font(.callout)
+                        }
+
                         Spacer()
                         Button {
                             panels.swapAt(index, index - 1)
@@ -655,7 +664,7 @@ private struct HomePanelListEditor: View {
                     .font(.callout)
                 }
 
-                Text("The strip divides its width between whatever is here, so three or four panels read better than eight.")
+                Text("The strip divides its width between whatever is here, so three or four panels read better than eight. \"Open app\" can be added as many times as you like.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -663,8 +672,23 @@ private struct HomePanelListEditor: View {
         .padding(.vertical, 2)
     }
 
+    private func chooseApp(for index: Int) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        panels[index].appPath = url.path
+    }
+
+    /// Most panels say the same thing twice if repeated, so they drop off the
+    /// menu once used. "Open app" is the exception and always stays.
     private var available: [HomePanel] {
-        HomePanel.allCases.filter { !panels.contains($0) }
+        HomePanel.allCases.filter { panel in
+            panel.allowsDuplicates || !panels.contains { $0.panel == panel }
+        }
     }
 }
 

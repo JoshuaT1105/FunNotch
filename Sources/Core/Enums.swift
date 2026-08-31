@@ -287,8 +287,14 @@ enum HomePanel: String, CaseIterable, Identifiable {
     case clipboard = "Last copied"
     case notes = "Note"
     case wifi = "Wi-Fi"
+    case openApp = "Open app"
 
     var id: String { rawValue }
+
+    /// Whether the strip may hold more than one of these. Everything else says
+    /// the same thing twice, but a launcher for a chosen app is only useful in
+    /// multiples.
+    var allowsDuplicates: Bool { self == .openApp }
 
     var symbol: String {
         switch self {
@@ -301,6 +307,7 @@ enum HomePanel: String, CaseIterable, Identifiable {
         case .clipboard:    return "doc.on.clipboard"
         case .notes:        return "note.text"
         case .wifi:         return "wifi"
+        case .openApp:      return "app.badge"
         }
     }
 
@@ -318,7 +325,44 @@ enum HomePanel: String, CaseIterable, Identifiable {
         case .battery:      return 1.0
         case .focusStreak:  return 1.0
         case .wifi:         return 1.0
+        case .openApp:      return 0.6
         }
+    }
+}
+
+/// One entry in the home strip. Panels need identity and a payload rather than
+/// being a bare enum: "Open app" can appear several times, each pointing at a
+/// different application, so the case alone no longer says what to draw.
+struct HomePanelInstance: Identifiable, Equatable {
+    let id: UUID
+    var panel: HomePanel
+    /// File path of the app to launch, for `.openApp`.
+    var appPath: String?
+
+    init(id: UUID = UUID(), panel: HomePanel, appPath: String? = nil) {
+        self.id = id
+        self.panel = panel
+        self.appPath = appPath
+    }
+
+    var appName: String? {
+        appPath.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+    }
+
+    /// Stored as a single string so the existing string-array preference keeps
+    /// working: older entries are a bare raw value and still decode.
+    var encoded: String {
+        guard let appPath, panel == .openApp else { return panel.rawValue }
+        return "\(panel.rawValue)\u{1F}\(appPath)"
+    }
+
+    static func decode(_ raw: String) -> HomePanelInstance? {
+        let parts = raw.split(separator: "\u{1F}", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let panel = HomePanel(rawValue: String(parts[0])) else { return nil }
+        return HomePanelInstance(
+            panel: panel,
+            appPath: parts.count > 1 ? String(parts[1]) : nil
+        )
     }
 }
 

@@ -11,6 +11,7 @@ import SwiftUI
 struct NotesView: View {
     @ObservedObject private var notes = NotesManager.shared
     @State private var keyMonitor: Any?
+    @State private var prompt = NotePrompts.random()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -20,9 +21,7 @@ struct NotesView: View {
                 // The panel never becomes the active app, so the placeholder is
                 // drawn rather than relying on a real prompt.
                 if notes.isEmpty {
-                    Text(notes.isToday
-                         ? "Jot something down. Saves to Desktop › notes."
-                         : "Nothing written on this day.")
+                    Text(notes.isToday ? prompt : "Nothing written on this day.")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.28))
                         .padding(.top, 2)
@@ -45,7 +44,12 @@ struct NotesView: View {
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
-        .onAppear { installEditingShortcuts() }
+        .onAppear {
+            installEditingShortcuts()
+            // A different one each time the tab is opened, so the empty state
+            // is worth reading twice.
+            prompt = NotePrompts.random()
+        }
         .onDisappear {
             removeEditingShortcuts()
             notes.saveNow()
@@ -155,5 +159,34 @@ struct NotesView: View {
     private func removeEditingShortcuts() {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
+    }
+}
+
+/// Placeholder lines for an empty note. An empty box is a small dead end, and
+/// this is the one place in the app where nothing useful can be shown instead.
+enum NotePrompts {
+    static let all = [
+        "Write it down. Your memory is a liar with good intentions.",
+        "The palest ink beats the best memory. Allegedly.",
+        "Nothing is so urgent it survives being written down.",
+        "A note now is an argument avoided later.",
+        "Your future self is not going to remember this. Be kind to them.",
+        "Half of thinking is just writing it down and looking at it.",
+        "If it matters, it deserves eight seconds of typing.",
+        "Good ideas arrive at bad times. Catch them anyway.",
+        "This is where the shower thought goes to survive.",
+        "Everything obvious right now will be mysterious by Thursday.",
+        "The best note is the one you actually took.",
+        "Say it here before you say it in a meeting.",
+        "You have had this idea before. Write it down this time.",
+        "Paper never interrupts.",
+        "Somewhere between a plan and a mess. That is fine.",
+        "Nobody is grading this.",
+        "Type badly. Edit later. Or do not.",
+        "Rough notes beat polished intentions."
+    ]
+
+    static func random() -> String {
+        all.randomElement() ?? all[0]
     }
 }

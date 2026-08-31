@@ -404,14 +404,18 @@ final class Settings: ObservableObject {
     }
 
     /// The strip along the bottom of the home tab, in order.
-    var homePanels: [HomePanel] {
+    var homePanels: [HomePanelInstance] {
         get {
             guard let raw = store.stringArray(forKey: "homePanels") else {
-                return [.quickActions, .systemStats, .battery]
+                return [
+                    HomePanelInstance(panel: .quickActions),
+                    HomePanelInstance(panel: .systemStats),
+                    HomePanelInstance(panel: .battery)
+                ]
             }
-            return raw.compactMap(HomePanel.init(rawValue:))
+            return raw.compactMap(HomePanelInstance.decode)
         }
-        set { write("homePanels", newValue.map(\.rawValue)) }
+        set { write("homePanels", newValue.map(\.encoded)) }
     }
 
     var homeStripEnabled: Bool {
