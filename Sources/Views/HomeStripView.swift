@@ -274,7 +274,7 @@ private struct BatteryPanel: View {
 
             PixelBatteryMeter(level: Double(battery.level), state: state,
                               isCharging: battery.isCharging)
-                .frame(height: 13)
+                .frame(height: 20)
 
             Text(detail)
                 .font(.system(size: 8.5))
@@ -286,64 +286,140 @@ private struct BatteryPanel: View {
     }
 }
 
-/// A blocky cell meter: an outline, a terminal nub, and whole cells of charge.
+/// A chunky battery: rounded pixel shell, terminal nub, and a handful of fat
+/// cells rather than a thin bar. Five segments is coarse for a percentage, but
+/// the number is written right beside it — this is the thing you glance at, and
+/// fat blocks read at a glance where thin stripes do not.
+///
+/// While charging, a plug slides in from behind on the left and bolts travel up
+/// the cable into the shell.
 private struct PixelBatteryMeter: View {
     let level: Double
     let state: BatteryState
     let isCharging: Bool
 
-    private let cells = 10
+    private let cell: CGFloat = 2
+    private let segments = 5
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { context in
             Canvas { ctx, size in
-                let t = context.date.timeIntervalSinceReferenceDate
-                let cell: CGFloat = 2
-                let nub: CGFloat = cell
-                let bodyWidth = size.width - nub - cell
-                let cellWidth = (bodyWidth - cell * 2) / CGFloat(cells)
+                draw(&ctx, size: size, t: context.date.timeIntervalSinceReferenceDate)
+            }
+        }
+        .drawingGroup()
+    }
 
-                func fill(_ r: CGRect, _ c: Color, _ o: Double) {
-                    ctx.fill(Path(r), with: .color(c.opacity(o)))
+    private func px(_ ctx: inout GraphicsContext, _ x: CGFloat, _ y: CGFloat,
+                    _ w: CGFloat, _ h: CGFloat, _ colour: Color, _ opacity: Double = 1) {
+        let c = cell
+        let rect = CGRect(x: (x / c).rounded() * c, y: (y / c).rounded() * c,
+                          width: max(w, c), height: max(h, c))
+        ctx.fill(Path(rect), with: .color(colour.opacity(opacity)))
+    }
+
+    private func draw(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
+        let c = cell
+        // The plug's space is reserved whether or not it is drawn. Sizing the
+        // shell around it made the whole battery jump smaller the moment a
+        // charger was plugged in, which looked like a glitch.
+        let plugSpace = c * 11
+        let nub = c * 2
+        let bodyX = plugSpace
+        let bodyW = size.width - plugSpace - nub
+        let bodyH = size.height
+        let shell = Color.white.opacity(0.42)
+
+        // Behind the shell, so it reads as plugging in rather than sitting
+        // alongside.
+        if isCharging {
+            drawPlug(&ctx, size: size, t: t, plugWidth: plugSpace)
+        }
+
+        // Shell, drawn as four bars with the corner pixels left out, which is
+        // how a rounded rectangle looks once it is made of whole pixels.
+        px(&ctx, bodyX + c, 0, bodyW - c * 2, c, shell)
+        px(&ctx, bodyX + c, bodyH - c, bodyW - c * 2, c, shell)
+        px(&ctx, bodyX, c, c, bodyH - c * 2, shell)
+        px(&ctx, bodyX + bodyW - c, c, c, bodyH - c * 2, shell)
+        px(&ctx, bodyX + bodyW, bodyH / 2 - c * 1.5, nub, c * 3, shell)
+
+        let inset = c * 2
+        let innerX = bodyX + inset
+        let innerW = bodyW - inset * 2
+        let innerY = inset
+        let innerH = bodyH - inset * 2
+        let gap = c
+        let segW = (innerW - gap * CGFloat(segments - 1)) / CGFloat(segments)
+
+        let exact = level * Double(segments)
+        let full = Int(exact)
+
+        for i in 0 ..< segments {
+            let x = innerX + CGFloat(i) * (segW + gap)
+            if i < full {
+                var opacity = 0.95
+                if isCharging {
+                    let head = Int(t * 3) % max(full + 1, 1)
+                    opacity = i == head ? 1.0 : 0.6
+                } else if state == .critical {
+                    opacity = 0.4 + (sin(t * 3.2) + 1) / 2 * 0.55
                 }
-
-                // Outline, drawn as four bars so the corners stay square.
-                let outline = CGRect(x: 0, y: 0, width: bodyWidth, height: size.height)
-                fill(CGRect(x: 0, y: 0, width: bodyWidth, height: cell), .white, 0.30)
-                fill(CGRect(x: 0, y: size.height - cell, width: bodyWidth, height: cell), .white, 0.30)
-                fill(CGRect(x: 0, y: 0, width: cell, height: size.height), .white, 0.30)
-                fill(CGRect(x: bodyWidth - cell, y: 0, width: cell, height: size.height), .white, 0.30)
-                // Terminal.
-                fill(CGRect(x: bodyWidth, y: size.height / 3, width: nub, height: size.height / 3), .white, 0.30)
-
-                let filled = Int((level * Double(cells)).rounded())
-                for i in 0 ..< cells {
-                    let x = cell + CGFloat(i) * cellWidth
-                    let rect = CGRect(x: x + 0.5, y: cell + 1,
-                                      width: cellWidth - 1, height: size.height - cell * 2 - 2)
-                    if i < filled {
-                        var opacity = 0.95
-                        if isCharging {
-                            // A brighter cell running left to right, so charging
-                            // reads as motion rather than a static green bar.
-                            let head = Int(t * 6).quotientAndRemainder(dividingBy: max(filled, 1)).remainder
-                            if i == head { opacity = 1.0 } else { opacity = 0.55 }
-                        } else if state == .critical {
-                            // A slow pulse: urgent without being a strobe.
-                            opacity = 0.45 + (sin(t * 3.2) + 1) / 2 * 0.5
-                        }
-                        fill(rect, state.tint, opacity)
-                    } else if isCharging, i == filled {
-                        // The cell about to fill, ghosted in.
-                        fill(rect, state.tint, 0.18 + (sin(t * 3) + 1) / 2 * 0.18)
-                    } else {
-                        fill(rect, .white, 0.06)
-                    }
+                px(&ctx, x, innerY, segW, innerH, state.tint, opacity)
+            } else if i == full {
+                let fraction = exact - Double(full)
+                if isCharging {
+                    px(&ctx, x, innerY, segW, innerH, state.tint,
+                       0.15 + (sin(t * 3.4) + 1) / 2 * 0.30)
+                } else if fraction > 0.05 {
+                    // Never thinner than a couple of pixels. At five segments a
+                    // 7% charge is a third of one block, and drawn to scale it
+                    // was a hairline you could mistake for empty.
+                    let width = max(segW * CGFloat(fraction), c * 2)
+                    px(&ctx, x, innerY, width, innerH, state.tint, 0.7)
                 }
-                _ = outline
             }
         }
     }
+
+    /// A plug and cable at the left, with bolts running along it into the
+    /// shell. Drawn before the shell so it passes behind it.
+    private func drawPlug(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval,
+                          plugWidth: CGFloat) {
+        let c = cell
+        let midY = (size.height / 2 / c).rounded() * c
+        let tint = state.tint
+        let metal = Color.white.opacity(0.38)
+
+        // Plug body, with a lead at the back and two pins at the front, so it
+        // reads as a plug rather than a rectangle. Kept compact so most of the
+        // reserved width is cable: the bolts need somewhere to travel, and the
+        // first version left them only three pixels of run before the shell
+        // hid them.
+        px(&ctx, 0, midY - c, c, c * 2, metal, 0.7)                  // lead
+        px(&ctx, c, midY - c * 2, c * 2, c * 4, metal)               // body
+        px(&ctx, c * 3, midY - c * 2, c, c, metal)                   // upper pin
+        px(&ctx, c * 3, midY + c, c, c, metal)                       // lower pin
+
+        // Cable run into the shell.
+        px(&ctx, c * 4, midY - c / 2, plugWidth - c * 4, c, metal, 0.45)
+
+        // Bolts travelling the cable: a three pixel zigzag, the smallest shape
+        // that still reads as lightning rather than a dot.
+        let start = c * 4
+        let travel = plugWidth - start
+        for i in 0 ..< 3 {
+            let phase = (t * 1.1 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+            let x = (start + CGFloat(phase) * travel / c).rounded() * c
+            // Fade in and out at the ends so they appear from the plug and
+            // vanish into the battery rather than popping.
+            let fade = min(phase / 0.2, min((1 - phase) / 0.25, 1))
+            px(&ctx, x + c, midY - c * 2, c, c, tint, 0.95 * fade)
+            px(&ctx, x, midY - c, c, c * 2, tint, 0.95 * fade)
+            px(&ctx, x + c, midY + c, c, c, tint, 0.95 * fade)
+        }
+    }
+
 }
 
 // MARK: - Bluetooth device batteries
