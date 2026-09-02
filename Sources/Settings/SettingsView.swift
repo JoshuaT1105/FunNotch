@@ -254,6 +254,36 @@ private struct AppearanceSettings: View {
                     }
                 }
 
+                Picker("On displays without a notch", selection: $settings.nonNotchStyle) {
+                    ForEach(NonNotchStyle.allCases) { style in
+                        Text(style.rawValue).tag(style)
+                    }
+                }
+                Text(settings.nonNotchStyle == .island
+                     ? "A floating pill below the menu bar, like the Dynamic Island. Nothing on an external monitor lines up with a fake notch, so this is the default there."
+                     : "An imitation notch flush with the top of the screen, matching a MacBook.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if settings.nonNotchStyle == .island {
+                    LabeledContent("Island width") {
+                        HStack {
+                            Slider(value: $settings.islandWidth, in: 100 ... 260, step: 2)
+                            Text("\(Int(settings.islandWidth))")
+                                .monospacedDigit()
+                                .frame(width: 32, alignment: .trailing)
+                        }
+                    }
+                    LabeledContent("Gap from the top") {
+                        HStack {
+                            Slider(value: $settings.islandTopGap, in: 0 ... 20, step: 1)
+                            Text("\(Int(settings.islandTopGap))")
+                                .monospacedDigit()
+                                .frame(width: 32, alignment: .trailing)
+                        }
+                    }
+                }
+
                 Picker("Height on other displays", selection: $settings.nonNotchHeightMode) {
                     ForEach(WindowHeightMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)

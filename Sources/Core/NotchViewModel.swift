@@ -356,6 +356,25 @@ final class NotchViewModel: ObservableObject {
         }
     }
 
+    /// Development aid: `--render-preview` runs on whatever display this Mac
+    /// has, which is usually one with a notch, so island mode could never be
+    /// captured without this.
+    var previewForceIsland = false
+
+    /// True when this panel is floating on a display with no physical notch.
+    var isIsland: Bool {
+        guard settings.nonNotchStyle == .island else { return false }
+        if previewForceIsland { return true }
+        guard let screen else { return false }
+        return !screen.hasPhysicalNotch
+    }
+
+    /// How far the island sits below the top of the screen. Zero on a real
+    /// notch, where the panel is flush with the hardware.
+    var islandTopGap: CGFloat {
+        isIsland ? settings.islandTopGap : 0
+    }
+
     var topCornerRadius: CGFloat {
         guard settings.cornerRadiusScaling else { return cornerRadiusInsets.closed.top }
         return notchState == .open ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.top

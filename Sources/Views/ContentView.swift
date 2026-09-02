@@ -25,14 +25,21 @@ struct ContentView: View {
                 }
                 notchContent
             }
-            .frame(width: size.width, height: size.height)
+            // The island floats, so the drawn shape is inset from the top of the
+            // window by the gap. The window itself stays flush with the screen
+            // edge — hover detection and positioning all key off its frame.
+            .frame(width: size.width, height: size.height - viewModel.islandTopGap)
             .clipShape(
                 NotchShape(
                     topCornerRadius: viewModel.topCornerRadius,
-                    bottomCornerRadius: viewModel.bottomCornerRadius
+                    bottomCornerRadius: viewModel.bottomCornerRadius,
+                    isIsland: viewModel.isIsland
                 )
             )
+            // Border before the padding, or it would be drawn around the gap
+            // as well and sit a few points above the shape it outlines.
             .overlay(border)
+            .padding(.top, viewModel.islandTopGap)
             .shadow(
                 color: .black.opacity(settings.enableShadow && viewModel.notchState == .open ? 0.55 : 0),
                 radius: 14,
@@ -65,16 +72,34 @@ struct ContentView: View {
     private var border: some View {
         if settings.notchBorderEnabled,
            viewModel.notchState == .open || settings.notchBorderWhenClosed {
-            NotchOutline(
-                topCornerRadius: viewModel.topCornerRadius,
-                bottomCornerRadius: viewModel.bottomCornerRadius,
-                inset: settings.notchBorderWidth / 2
-            )
-            .stroke(
-                settings.resolvedBorderColor(albumArt: music.artworkColor)
-                    .opacity(settings.notchBorderOpacity),
-                lineWidth: settings.notchBorderWidth
-            )
+            Group {
+                if viewModel.isIsland {
+                    // Floating, so it gets an outline the whole way round.
+                    // NotchOutline deliberately omits the top edge, which is
+                    // right against the screen edge and wrong in mid-air.
+                    NotchShape(
+                        topCornerRadius: viewModel.topCornerRadius,
+                        bottomCornerRadius: viewModel.bottomCornerRadius,
+                        isIsland: true
+                    )
+                    .strokeBorder(
+                        settings.resolvedBorderColor(albumArt: music.artworkColor)
+                            .opacity(settings.notchBorderOpacity),
+                        lineWidth: settings.notchBorderWidth
+                    )
+                } else {
+                    NotchOutline(
+                        topCornerRadius: viewModel.topCornerRadius,
+                        bottomCornerRadius: viewModel.bottomCornerRadius,
+                        inset: settings.notchBorderWidth / 2
+                    )
+                    .stroke(
+                        settings.resolvedBorderColor(albumArt: music.artworkColor)
+                            .opacity(settings.notchBorderOpacity),
+                        lineWidth: settings.notchBorderWidth
+                    )
+                }
+            }
             .allowsHitTesting(false)
         }
     }

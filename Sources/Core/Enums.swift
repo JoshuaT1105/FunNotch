@@ -368,3 +368,17 @@ struct HomePanelInstance: Identifiable, Equatable {
     }
 }
 
+/// How the panel looks on a display with no physical notch.
+///
+/// A fake notch flush with the top edge is the right answer on a MacBook,
+/// where it lines up with real hardware. On an external monitor there is
+/// nothing to line up with, and a black slab welded to the top of the screen
+/// just looks like a dead pixel row — so the default there is an island that
+/// floats free of the edge.
+enum NonNotchStyle: String, CaseIterable, Identifiable {
+    case island = "Dynamic Island"
+    case notch = "Fake notch"
+
+    var id: String { rawValue }
+}
+

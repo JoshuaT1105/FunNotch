@@ -192,6 +192,25 @@ final class Settings: ObservableObject {
         set { write("notchHeightMode", newValue.rawValue); postGeometryChange() }
     }
 
+    /// Shape used on displays without a physical notch.
+    var nonNotchStyle: NonNotchStyle {
+        get { NonNotchStyle(rawValue: string("nonNotchStyle", NonNotchStyle.island.rawValue)) ?? .island }
+        set { write("nonNotchStyle", newValue.rawValue) }
+    }
+
+    /// Width of the collapsed island. Narrower than a fake notch on purpose:
+    /// it is a floating pill, not an imitation of hardware.
+    var islandWidth: CGFloat {
+        get { number("islandWidth", 148) }
+        set { write("islandWidth", newValue) }
+    }
+
+    /// How far the island floats below the top of the screen.
+    var islandTopGap: CGFloat {
+        get { number("islandTopGap", 6) }
+        set { write("islandTopGap", newValue) }
+    }
+
     var nonNotchHeightMode: WindowHeightMode {
         get { option("nonNotchHeightMode", WindowHeightMode.matchMenuBar) }
         set { write("nonNotchHeightMode", newValue.rawValue); postGeometryChange() }

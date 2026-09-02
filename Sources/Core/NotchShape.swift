@@ -16,10 +16,16 @@ struct NotchShape: InsettableShape {
     /// to keep a border wholly inside the silhouette instead of straddling the
     /// edge and losing its outer half to the clip.
     private var inset: CGFloat = 0
+    /// Draw as a free-floating pill rather than a notch silhouette. The notch
+    /// shape only makes sense against the top edge of the screen: its top
+    /// corners are concave so they flare out to meet it. Floating, that flare
+    /// has nothing to meet and reads as a mistake.
+    private var isIsland: Bool = false
 
-    init(topCornerRadius: CGFloat? = nil, bottomCornerRadius: CGFloat? = nil) {
+    init(topCornerRadius: CGFloat? = nil, bottomCornerRadius: CGFloat? = nil, isIsland: Bool = false) {
         self.topCornerRadius = topCornerRadius ?? 6
         self.bottomCornerRadius = bottomCornerRadius ?? 14
+        self.isIsland = isIsland
     }
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
@@ -59,6 +65,15 @@ struct NotchShape: InsettableShape {
         let rect = fullRect.insetBy(dx: inset, dy: inset)
         let bottomCornerRadius = max(self.bottomCornerRadius - inset, 0)
         let topCornerRadius = self.topCornerRadius + inset
+
+        if isIsland {
+            // Half the height makes a true capsule while collapsed, which is
+            // the shape people mean by "island". Capped once it opens, where
+            // half of 200 points would be a lozenge rather than a panel.
+            let radius = min(rect.height / 2, 22)
+            return Path(roundedRect: rect, cornerRadius: radius, style: .continuous)
+        }
+
         var path = Path()
 
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))

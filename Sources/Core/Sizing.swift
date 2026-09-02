@@ -95,6 +95,13 @@ func measureClosedNotch(for screen: NSScreen?) -> CGSize {
         case .matchRealNotchSize, .custom:
             break
         }
+
+        if settings.nonNotchStyle == .island {
+            // A compact pill rather than a slab the width of a real notch, and
+            // taller by the gap it floats below the screen edge.
+            notchWidth = settings.islandWidth
+            notchHeight += settings.islandTopGap
+        }
     }
 
     return CGSize(

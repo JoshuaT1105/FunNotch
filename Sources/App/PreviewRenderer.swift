@@ -107,6 +107,23 @@ enum PreviewRenderer {
             viewModel.currentTab = .focus
         }))
 
+        scenes.append(("island-closed", { viewModel in
+            viewModel.previewForceIsland = true
+            viewModel.closedNotchSize = CGSize(
+                width: Settings.shared.islandWidth,
+                height: 32 + Settings.shared.islandTopGap
+            )
+        }))
+
+        scenes.append(("island-open", { viewModel in
+            viewModel.previewForceIsland = true
+            viewModel.closedNotchSize = CGSize(
+                width: Settings.shared.islandWidth,
+                height: 32 + Settings.shared.islandTopGap
+            )
+            viewModel.previewOpen()
+        }))
+
         scenes.append(("open-timer", { viewModel in
             TimerManager.shared.start(seconds: 600)
             viewModel.previewOpen()
