@@ -272,9 +272,9 @@ private struct BatteryPanel: View {
                     .foregroundStyle(state.tint)
             }
 
-            PixelBatteryMeter(level: Double(battery.level), state: state,
-                              isCharging: battery.isCharging)
-                .frame(height: 20)
+            BatteryMeter(level: Double(battery.level), state: state,
+                         isCharging: battery.isCharging)
+                .frame(height: 15)
 
             Text(detail)
                 .font(.system(size: 8.5))
@@ -286,140 +286,148 @@ private struct BatteryPanel: View {
     }
 }
 
-/// A chunky battery: rounded pixel shell, terminal nub, and a handful of fat
-/// cells rather than a thin bar. Five segments is coarse for a percentage, but
-/// the number is written right beside it — this is the thing you glance at, and
-/// fat blocks read at a glance where thin stripes do not.
+/// A smooth battery indicator.
 ///
-/// While charging, a plug slides in from behind on the left and bolts travel up
-/// the cable into the shell.
-private struct PixelBatteryMeter: View {
+/// Drawn with real curves rather than the pixel grid used elsewhere: this is
+/// the one panel read at a glance for a number, and chunky cells made it look
+/// like a readout from something broken rather than a status.
+///
+/// Deliberately built from small subviews with explicit sizes. Expressed as one
+/// nested chain the Swift type checker took minutes and then gave up.
+private struct BatteryMeter: View {
     let level: Double
     let state: BatteryState
     let isCharging: Bool
 
-    private let cell: CGFloat = 2
-    private let segments = 5
+    var body: some View {
+        GeometryReader { geo in
+            content(in: geo.size)
+        }
+    }
+
+    private func content(in size: CGSize) -> some View {
+        let h: CGFloat = size.height
+        let nub: CGFloat = max(h * 0.16, 2)
+        let bodyW: CGFloat = size.width - nub - 2
+        let radius: CGFloat = h * 0.34
+        let inset: CGFloat = 1.8
+        let innerH: CGFloat = h - inset * 2
+        let maxW: CGFloat = bodyW - inset * 2
+        // Never narrower than it is tall: a sliver of colour at 3% is harder to
+        // read than a small rounded block, and reads as empty.
+        let innerW: CGFloat = max(maxW * CGFloat(level), innerH)
+
+        return ZStack(alignment: .leading) {
+            shell(width: bodyW, height: h, radius: radius)
+            terminal(nub: nub, height: h, offset: bodyW + 1)
+            fill(width: innerW, height: innerH, radius: radius - inset, inset: inset)
+            bolt(height: h, x: boltX(innerW: innerW, bodyW: bodyW, height: h, inset: inset))
+        }
+        .frame(width: size.width, height: h, alignment: .leading)
+    }
+
+    private func shell(width: CGFloat, height: CGFloat, radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.25), lineWidth: 1.3)
+            .frame(width: width, height: height)
+    }
+
+    private func terminal(nub: CGFloat, height: CGFloat, offset: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: nub * 0.45, style: .continuous)
+            .fill(Color.white.opacity(0.25))
+            .frame(width: nub, height: height * 0.38)
+            .offset(x: offset)
+    }
+
+    private func fill(width: CGFloat, height: CGFloat, radius: CGFloat, inset: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
+        let gradient = LinearGradient(
+            colors: [state.tint, state.tint.opacity(0.78)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        return shape
+            .fill(gradient)
+            .frame(width: width, height: height)
+            .overlay { sheen(width: width, height: height, radius: radius) }
+            .clipShape(shape)
+            .shadow(color: state.tint.opacity(isCharging ? 0.35 : 0.16), radius: 2.5)
+            .offset(x: inset)
+            .animation(.easeInOut(duration: 0.5), value: level)
+    }
+
+    @ViewBuilder
+    private func sheen(width: CGFloat, height: CGFloat, radius: CGFloat) -> some View {
+        if isCharging {
+            ChargingSheen(width: width, height: height)
+        } else if state == .critical {
+            CriticalPulse(tint: state.tint)
+        }
+    }
+
+    /// The bolt rides the charge front rather than sitting in the middle of the
+    /// shell. Centred, it floats unattached in the empty half at low charge and
+    /// reads as decoration; on the front it reads as the place energy is going
+    /// in. Clamped so it stays inside the shell at both extremes.
+    private func boltX(innerW: CGFloat, bodyW: CGFloat, height: CGFloat, inset: CGFloat) -> CGFloat {
+        let size = height * 0.52
+        let ideal = inset + innerW - size * 0.72
+        return min(max(ideal, inset + 1), bodyW - size - inset - 1)
+    }
+
+    @ViewBuilder
+    private func bolt(height: CGFloat, x: CGFloat) -> some View {
+        if isCharging {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: height * 0.52, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.55), radius: 1.5)
+                .offset(x: x)
+        }
+    }
+}
+
+/// A highlight sweeping along the charge, then a beat of stillness. A shimmer
+/// that never stops reads as a loading bar rather than a battery filling.
+private struct ChargingSheen: View {
+    let width: CGFloat
+    let height: CGFloat
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { context in
-            Canvas { ctx, size in
-                draw(&ctx, size: size, t: context.date.timeIntervalSinceReferenceDate)
-            }
-        }
-        .drawingGroup()
-    }
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t: Double = context.date.timeIntervalSinceReferenceDate
+            let cycle: Double = t.truncatingRemainder(dividingBy: 2.2) / 1.25
+            let progress: Double = min(cycle, 1.0)
+            let band: CGFloat = max(width * 0.4, 12)
+            let x: CGFloat = -band + CGFloat(progress) * (width + band * 2)
 
-    private func px(_ ctx: inout GraphicsContext, _ x: CGFloat, _ y: CGFloat,
-                    _ w: CGFloat, _ h: CGFloat, _ colour: Color, _ opacity: Double = 1) {
-        let c = cell
-        let rect = CGRect(x: (x / c).rounded() * c, y: (y / c).rounded() * c,
-                          width: max(w, c), height: max(h, c))
-        ctx.fill(Path(rect), with: .color(colour.opacity(opacity)))
-    }
-
-    private func draw(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval) {
-        let c = cell
-        // The plug's space is reserved whether or not it is drawn. Sizing the
-        // shell around it made the whole battery jump smaller the moment a
-        // charger was plugged in, which looked like a glitch.
-        let plugSpace = c * 11
-        let nub = c * 2
-        let bodyX = plugSpace
-        let bodyW = size.width - plugSpace - nub
-        let bodyH = size.height
-        let shell = Color.white.opacity(0.42)
-
-        // Behind the shell, so it reads as plugging in rather than sitting
-        // alongside.
-        if isCharging {
-            drawPlug(&ctx, size: size, t: t, plugWidth: plugSpace)
-        }
-
-        // Shell, drawn as four bars with the corner pixels left out, which is
-        // how a rounded rectangle looks once it is made of whole pixels.
-        px(&ctx, bodyX + c, 0, bodyW - c * 2, c, shell)
-        px(&ctx, bodyX + c, bodyH - c, bodyW - c * 2, c, shell)
-        px(&ctx, bodyX, c, c, bodyH - c * 2, shell)
-        px(&ctx, bodyX + bodyW - c, c, c, bodyH - c * 2, shell)
-        px(&ctx, bodyX + bodyW, bodyH / 2 - c * 1.5, nub, c * 3, shell)
-
-        let inset = c * 2
-        let innerX = bodyX + inset
-        let innerW = bodyW - inset * 2
-        let innerY = inset
-        let innerH = bodyH - inset * 2
-        let gap = c
-        let segW = (innerW - gap * CGFloat(segments - 1)) / CGFloat(segments)
-
-        let exact = level * Double(segments)
-        let full = Int(exact)
-
-        for i in 0 ..< segments {
-            let x = innerX + CGFloat(i) * (segW + gap)
-            if i < full {
-                var opacity = 0.95
-                if isCharging {
-                    let head = Int(t * 3) % max(full + 1, 1)
-                    opacity = i == head ? 1.0 : 0.6
-                } else if state == .critical {
-                    opacity = 0.4 + (sin(t * 3.2) + 1) / 2 * 0.55
-                }
-                px(&ctx, x, innerY, segW, innerH, state.tint, opacity)
-            } else if i == full {
-                let fraction = exact - Double(full)
-                if isCharging {
-                    px(&ctx, x, innerY, segW, innerH, state.tint,
-                       0.15 + (sin(t * 3.4) + 1) / 2 * 0.30)
-                } else if fraction > 0.05 {
-                    // Never thinner than a couple of pixels. At five segments a
-                    // 7% charge is a third of one block, and drawn to scale it
-                    // was a hairline you could mistake for empty.
-                    let width = max(segW * CGFloat(fraction), c * 2)
-                    px(&ctx, x, innerY, width, innerH, state.tint, 0.7)
-                }
-            }
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0), location: 0),
+                    .init(color: .white.opacity(cycle > 1 ? 0 : 0.5), location: 0.5),
+                    .init(color: .white.opacity(0), location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: band, height: height)
+            .offset(x: x)
+            .frame(width: width, height: height, alignment: .leading)
         }
     }
+}
 
-    /// A plug and cable at the left, with bolts running along it into the
-    /// shell. Drawn before the shell so it passes behind it.
-    private func drawPlug(_ ctx: inout GraphicsContext, size: CGSize, t: TimeInterval,
-                          plugWidth: CGFloat) {
-        let c = cell
-        let midY = (size.height / 2 / c).rounded() * c
-        let tint = state.tint
-        let metal = Color.white.opacity(0.38)
+/// Slow breathing on a critical charge. Urgent without strobing.
+private struct CriticalPulse: View {
+    let tint: Color
 
-        // Plug body, with a lead at the back and two pins at the front, so it
-        // reads as a plug rather than a rectangle. Kept compact so most of the
-        // reserved width is cable: the bolts need somewhere to travel, and the
-        // first version left them only three pixels of run before the shell
-        // hid them.
-        px(&ctx, 0, midY - c, c, c * 2, metal, 0.7)                  // lead
-        px(&ctx, c, midY - c * 2, c * 2, c * 4, metal)               // body
-        px(&ctx, c * 3, midY - c * 2, c, c, metal)                   // upper pin
-        px(&ctx, c * 3, midY + c, c, c, metal)                       // lower pin
-
-        // Cable run into the shell.
-        px(&ctx, c * 4, midY - c / 2, plugWidth - c * 4, c, metal, 0.45)
-
-        // Bolts travelling the cable: a three pixel zigzag, the smallest shape
-        // that still reads as lightning rather than a dot.
-        let start = c * 4
-        let travel = plugWidth - start
-        for i in 0 ..< 3 {
-            let phase = (t * 1.1 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-            let x = (start + CGFloat(phase) * travel / c).rounded() * c
-            // Fade in and out at the ends so they appear from the plug and
-            // vanish into the battery rather than popping.
-            let fade = min(phase / 0.2, min((1 - phase) / 0.25, 1))
-            px(&ctx, x + c, midY - c * 2, c, c, tint, 0.95 * fade)
-            px(&ctx, x, midY - c, c, c * 2, tint, 0.95 * fade)
-            px(&ctx, x + c, midY + c, c, c, tint, 0.95 * fade)
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+            let t: Double = context.date.timeIntervalSinceReferenceDate
+            let amount: Double = (sin(t * 2.6) + 1) / 2
+            Color.white.opacity(0.10 + amount * 0.28)
         }
     }
-
 }
 
 // MARK: - Bluetooth device batteries
