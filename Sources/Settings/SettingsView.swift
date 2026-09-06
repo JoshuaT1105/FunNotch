@@ -319,6 +319,11 @@ private struct AppearanceSettings: View {
                 Text("Choose which widgets appear on the home tab, how wide each one is, and which row it sits in.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle("Show the weather when nothing is playing", isOn: $settings.showWeatherWhenIdle)
+                Text("The Now playing widget falls back to the weather instead of an empty player.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Button("Reset to default layout") {
                     Settings.shared.resetHomeLayout()
                 }
@@ -449,25 +454,25 @@ private struct AppearanceSettings: View {
                 Toggle("Colour the spectrum bars", isOn: $settings.coloredSpectrogram)
             }
 
+            // Whether the mirror and the weather appear at all is decided by
+            // the home screen layout now, so only the settings that change how
+            // they look are left here.
             Section("Mirror") {
-                Toggle("Show the weather when nothing is playing", isOn: $settings.showWeatherWhenIdle)
-                Text("Fills the empty player on the home tab with the current conditions and a small pixel animation.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Toggle("Show the camera mirror", isOn: $settings.showMirror)
                 Picker("Mirror shape", selection: $settings.mirrorShape) {
                     ForEach(MirrorShapeEnum.allCases) { shape in
                         Text(shape.rawValue).tag(shape)
                     }
                 }
-                .disabled(!settings.showMirror)
 
-                if settings.showMirror, AVCaptureDevice.authorizationStatus(for: .video) != .authorized {
+                if AVCaptureDevice.authorizationStatus(for: .video) != .authorized {
                     Button("Grant camera access") {
                         WebcamManager.shared.requestAccessIfNeeded { _ in }
                     }
                 }
+
+                Text("Add the camera mirror from Customise… on the Home screen, where you can also set it to appear only before a video call.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -1363,7 +1368,6 @@ private struct CalendarSettings: View {
     var body: some View {
         Form {
             Section("Agenda") {
-                Toggle("Show the calendar in the notch", isOn: $settings.showCalendar)
                 Toggle("Hide all-day events", isOn: $settings.hideAllDayEvents)
                 Toggle("Show full event titles", isOn: $settings.showFullEventTitles)
                 Toggle("Include reminders", isOn: $settings.showReminders)
@@ -1376,7 +1380,6 @@ private struct CalendarSettings: View {
             // somebody looking for it will look here first.
             Section("Examples") {
                 Toggle("Fill an empty agenda with examples", isOn: $settings.showSampleAgenda)
-                    .disabled(!settings.showCalendar)
                 Text("""
                 A day with nothing on it shows a few example events and reminders \
                 instead of empty space — useful for screenshots, or if you simply \
@@ -1387,11 +1390,6 @@ private struct CalendarSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if !settings.showCalendar {
-                    Text("The calendar is switched off above, so there is no agenda to fill.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section("Calendars") {

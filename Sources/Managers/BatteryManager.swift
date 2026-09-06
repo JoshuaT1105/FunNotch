@@ -39,6 +39,17 @@ final class BatteryManager: ObservableObject {
     private init() {}
 
     func start() {
+        // Idempotent on purpose. Every call used to add another run loop source
+        // and another repeating timer, so a view that called `start()` in
+        // `onAppear` multiplied them on every appearance: each power
+        // notification then fired several refreshes, each refresh published,
+        // each publish redrew, and the main run loop never got a quiet moment
+        // again. That hung the app rather than merely wasting cycles.
+        guard runLoopSource == nil else {
+            refresh(announce: false)
+            return
+        }
+
         // IOKit calls back whenever the power source changes.
         let context = Unmanaged.passUnretained(self).toOpaque()
         if let source = IOPSNotificationCreateRunLoopSource({ context in

@@ -29,6 +29,9 @@ struct HomeStripPanel: View {
         case .clipboard:    ClipboardPanel()
         case .wifi:         WiFiPanel()
         case .openApp:      OpenAppPanel(path: tile.appPath)
+        case .mediaScrubber: MediaScrubberPanel()
+        case .nextEvent:    NextEventPanel()
+        case .diskSpace:    DiskSpacePanel()
         default:            EmptyView()
         }
     }
@@ -53,7 +56,7 @@ struct HomePanelChrome<Content: View>: View {
 // MARK: - Shared pieces
 
 /// A caption in the strip's house style.
-private struct PanelLabel: View {
+struct PanelLabel: View {
     let text: String
     var body: some View {
         Text(text.uppercased())
@@ -265,7 +268,6 @@ private struct BatteryPanel: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear { battery.start() }
     }
 }
 
@@ -653,5 +655,106 @@ private struct OpenAppPanel: View {
         .buttonStyle(.plain)
         .disabled(icon == nil)
         .help(icon == nil ? "Pick an app in Settings" : "Open \(name)")
+    }
+}
+
+// MARK: - Media scrubber
+
+/// Now playing reduced to a title and a progress line. Useful as a tile that
+/// only appears while something is playing.
+struct MediaScrubberPanel: View {
+    @ObservedObject private var music = MusicManager.shared
+    @ObservedObject private var settings = Settings.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if music.track.isEmpty {
+                PanelLabel(text: "Nothing playing")
+            } else {
+                Text(music.track.title)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                Text(music.track.artist)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+
+                GeometryReader { geo in
+                    let fraction = music.track.duration > 0
+                        ? min(max(music.displayedElapsed / music.track.duration, 0), 1)
+                        : 0
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.14))
+                        Capsule()
+                            .fill(settings.accentColor)
+                            .frame(width: geo.size.width * fraction)
+                    }
+                }
+                .frame(height: 3)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Next event
+
+struct NextEventPanel: View {
+    @ObservedObject private var calendar = CalendarManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            PanelLabel(text: "Next")
+            if let item = calendar.nextItem, !item.isSample {
+                Text(item.title)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                if let start = item.start {
+                    Text(start.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            } else {
+                Text("Nothing scheduled")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Disk space
+
+struct DiskSpacePanel: View {
+    @ObservedObject private var stats = SystemStatsManager.shared
+
+    private var freeText: String {
+        let gb = Double(stats.diskFreeBytes) / 1_000_000_000
+        return gb >= 100 ? String(format: "%.0f GB", gb) : String(format: "%.1f GB", gb)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            PanelLabel(text: "Disk free")
+            Text(freeText)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.92))
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.12))
+                    Capsule()
+                        .fill(stats.diskUsage > 0.9 ? Color.orange : Color.white.opacity(0.6))
+                        .frame(width: geo.size.width * stats.diskUsage)
+                }
+            }
+            .frame(height: 3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { stats.addSubscriber() }
+        .onDisappear { stats.removeSubscriber() }
     }
 }

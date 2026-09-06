@@ -436,6 +436,38 @@ final class Settings: ObservableObject {
         homeTiles = HomeLayout.default
     }
 
+    // MARK: Saved layouts
+    //
+    // Named layouts, so a setup built for a desk with a second monitor can be
+    // switched back to without rebuilding it tile by tile.
+
+    var layoutSlotNames: [String] {
+        get { store.stringArray(forKey: "layoutSlotNames") ?? [] }
+        set { write("layoutSlotNames", newValue) }
+    }
+
+    func saveLayoutSlot(_ name: String, tiles: [HomeTile]) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        write("layoutSlot.\(trimmed)", tiles.map(\.encoded))
+        var names = layoutSlotNames
+        if !names.contains(trimmed) {
+            names.append(trimmed)
+            layoutSlotNames = names
+        }
+    }
+
+    func layoutSlot(_ name: String) -> [HomeTile]? {
+        guard let raw = store.stringArray(forKey: "layoutSlot.\(name)") else { return nil }
+        let tiles = raw.compactMap(HomeTile.decode)
+        return tiles.isEmpty ? nil : tiles
+    }
+
+    func deleteLayoutSlot(_ name: String) {
+        store.removeObject(forKey: "layoutSlot.\(name)")
+        layoutSlotNames = layoutSlotNames.filter { $0 != name }
+    }
+
     private func widgetList(_ key: String, default fallback: [NotchWidget]) -> [NotchWidget] {
         guard let raw = store.stringArray(forKey: key) else { return fallback }
         return raw.compactMap(NotchWidget.init(rawValue:))

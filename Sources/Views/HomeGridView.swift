@@ -8,17 +8,37 @@
 import SwiftUI
 
 struct HomeGridView: View {
+    @EnvironmentObject private var viewModel: NotchViewModel
     @ObservedObject private var settings = Settings.shared
     @ObservedObject private var music = MusicManager.shared
+    @ObservedObject private var focus = FocusManager.shared
+    @ObservedObject private var battery = BatteryManager.shared
+    @ObservedObject private var calendar = CalendarManager.shared
 
     var body: some View {
-        let tiles = settings.homeTiles
+        // Conditions are evaluated here rather than inside each tile so a tile
+        // that is not shown is never built, and the row divides its width
+        // between what is actually visible.
+        let tiles = settings.homeTiles.filter {
+            TileConditionEvaluator.isSatisfied($0.condition,
+                                               notchIsOpen: viewModel.notchState == .open)
+        }
         let top = HomeLayout.tiles(in: tiles, row: 0)
         let bottom = HomeLayout.tiles(in: tiles, row: 1)
 
-        VStack(spacing: 8) {
+        // Widths are arithmetic, not measurement. The open notch is a fixed
+        // 690 points wide with 22 of padding either side, so the row already
+        // knows how much space it has and nothing needs to ask.
+        //
+        // Both of the obvious alternatives were tried and both hung: a
+        // GeometryReader wants to fill a container that is sizing itself to its
+        // content, so the two waited on each other and SwiftUI recursed until
+        // it locked up; a custom Layout broke the recursion but then ground
+        // through hundreds of re-measurements of the album art and canvases.
+        VStack(spacing: (top.isEmpty || bottom.isEmpty) ? 0 : 8) {
             if !top.isEmpty {
                 row(top, spacing: 14)
+                    .frame(maxHeight: .infinity)
             }
             if !bottom.isEmpty {
                 row(bottom, spacing: 6)
@@ -28,17 +48,19 @@ struct HomeGridView: View {
         .padding(.top, 10)
     }
 
+    /// Width available to a row inside the open notch.
+    private static let rowWidth = openNotchSize.width - 44
+
     private func row(_ tiles: [HomeTile], spacing: CGFloat) -> some View {
-        GeometryReader { geo in
-            let total = tiles.reduce(0) { $0 + CGFloat($1.span) }
-            let available = geo.size.width - spacing * CGFloat(max(tiles.count - 1, 0))
-            HStack(alignment: .top, spacing: spacing) {
-                ForEach(tiles) { tile in
-                    HomeTileView(tile: tile)
-                        .frame(width: available * CGFloat(tile.span) / total)
-                }
+        let total = max(tiles.reduce(0) { $0 + CGFloat($1.span) }, 1)
+        let available = Self.rowWidth - spacing * CGFloat(max(tiles.count - 1, 0))
+        return HStack(alignment: .top, spacing: spacing) {
+            ForEach(tiles) { tile in
+                HomeTileView(tile: tile)
+                    .frame(width: max(available * CGFloat(tile.span) / total, 24))
             }
         }
+        .frame(width: Self.rowWidth, alignment: .leading)
     }
 }
 

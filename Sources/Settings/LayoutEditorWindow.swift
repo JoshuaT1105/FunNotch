@@ -57,26 +57,38 @@ struct LayoutEditorView: View {
     /// the saved layout while this window is open.
     @State private var tiles: [HomeTile] = Settings.shared.homeTiles
     @State private var selection: UUID?
-    @State private var dragging: HomeTileKind?
+    @State private var slotName: String = ""
+    @State private var showingSaveSlot = false
 
     var body: some View {
         VStack(spacing: 0) {
+            slotBar
+            Divider()
             preview
             Divider()
             palette
             Divider()
             footer
         }
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: 760, minHeight: 560)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: Preview
 
     private var preview: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your notch")
-                .font(.headline)
-            Text("Drag a widget from below into a row. Click one to resize or remove it.")
+            HStack(spacing: 6) {
+                Image(systemName: "rectangle.topthird.inset.filled")
+                    .foregroundStyle(.secondary)
+                Text("Your notch")
+                    .font(.headline)
+                Spacer()
+                if let tile = selectedTile {
+                    conditionPicker(for: tile)
+                }
+            }
+            Text("Drag a widget in, or double-click it. Click a placed widget to resize, move row, or set when it appears.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -207,6 +219,108 @@ struct LayoutEditorView: View {
         .font(.system(size: 9))
     }
 
+    private var selectedTile: HomeTile? {
+        tiles.first { $0.id == selection }
+    }
+
+    /// Named layouts across the top, the way a design tool keeps artboards.
+    private var slotBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.stack.3d.up")
+                .foregroundStyle(.secondary)
+            Text("Layouts")
+                .font(.subheadline.weight(.medium))
+
+            ForEach(Settings.shared.layoutSlotNames, id: \.self) { name in
+                slotChip(name)
+            }
+
+            Button {
+                showingSaveSlot = true
+            } label: {
+                Label("Save as…", systemImage: "plus")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .popover(isPresented: $showingSaveSlot) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Name this layout").font(.subheadline.weight(.semibold))
+                    TextField("Desk setup", text: $slotName)
+                        .frame(width: 190)
+                        .onSubmit { commitSlot() }
+                    HStack {
+                        Spacer()
+                        Button("Save") { commitSlot() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(slotName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                .padding(14)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func slotChip(_ name: String) -> some View {
+        HStack(spacing: 4) {
+            Text(name).font(.caption)
+            Button {
+                Settings.shared.deleteLayoutSlot(name)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 9))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.secondary.opacity(0.15)))
+        .contentShape(Capsule())
+        .onTapGesture {
+            if let loaded = Settings.shared.layoutSlot(name) {
+                tiles = loaded
+                selection = nil
+            }
+        }
+        .help("Click to load this layout")
+    }
+
+    private func commitSlot() {
+        Settings.shared.saveLayoutSlot(slotName, tiles: tiles)
+        slotName = ""
+        showingSaveSlot = false
+    }
+
+    /// When the selected tile is shown. This is the whole point of the editor
+    /// for anything conditional — a camera mirror that is always there is just
+    /// clutter, and one that appears before a call is useful.
+    private func conditionPicker(for tile: HomeTile) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: tile.condition.symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Show", selection: Binding(
+                get: { tile.condition },
+                set: { setCondition($0, on: tile) }
+            )) {
+                ForEach(TileCondition.allCases) { condition in
+                    Text(condition.rawValue).tag(condition)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 210)
+        }
+    }
+
+    private func setCondition(_ condition: TileCondition, on tile: HomeTile) {
+        guard let index = tiles.firstIndex(where: { $0.id == tile.id }) else { return }
+        tiles[index].condition = condition
+    }
+
     // MARK: Palette
 
     private var palette: some View {
@@ -224,22 +338,34 @@ struct LayoutEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private func paletteChip(_ kind: HomeTileKind) -> some View {
-        HStack(spacing: 6) {
+        let placed = isPlaced(kind)
+        HStack(spacing: 7) {
             Image(systemName: kind.symbol)
                 .frame(width: 16)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(placed ? .tertiary : .secondary)
             Text(kind.rawValue)
                 .font(.callout)
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if placed {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.secondary.opacity(0.12))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.secondary.opacity(placed ? 0.06 : 0.14))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.secondary.opacity(placed ? 0.10 : 0), lineWidth: 1)
+        )
+        .opacity(placed ? 0.55 : 1)
         .contentShape(Rectangle())
         .draggable(kind.rawValue) {
             Label(kind.rawValue, systemImage: kind.symbol)
@@ -247,15 +373,17 @@ struct LayoutEditorView: View {
                 .background(.thinMaterial)
         }
         .onTapGesture(count: 2) { add(kind, to: kind.naturalRow) }
-        .help("Drag onto a row, or double-click to add")
+        .help(placed ? "Already on the home screen" : "Drag onto a row, or double-click to add")
     }
 
-    /// A kind already placed disappears from the palette, unless it is one that
-    /// makes sense more than once.
-    private var available: [HomeTileKind] {
-        HomeTileKind.allCases.filter { kind in
-            kind.allowsDuplicates || !tiles.contains { $0.kind == kind }
-        }
+    /// Every widget stays on the palette, including the ones already placed —
+    /// they are simply dimmed. Removing them from the list as they were used
+    /// meant the palette rearranged itself under the pointer, and there was no
+    /// way to see what existed without deleting things to find out.
+    private var available: [HomeTileKind] { HomeTileKind.allCases }
+
+    private func isPlaced(_ kind: HomeTileKind) -> Bool {
+        !kind.allowsDuplicates && tiles.contains { $0.kind == kind }
     }
 
     // MARK: Footer

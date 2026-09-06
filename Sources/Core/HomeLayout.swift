@@ -34,6 +34,9 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
     case clipboard = "Last copied"
     case wifi = "Wi-Fi"
     case openApp = "Open app"
+    case mediaScrubber = "Media scrubber"
+    case nextEvent = "Next event"
+    case diskSpace = "Disk space"
 
     var id: String { rawValue }
 
@@ -55,6 +58,9 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
         case .clipboard:    return "doc.on.clipboard"
         case .wifi:         return "wifi"
         case .openApp:      return "app.badge"
+        case .mediaScrubber: return "waveform"
+        case .nextEvent:    return "calendar.badge.clock"
+        case .diskSpace:    return "internaldrive"
         }
     }
 
@@ -79,6 +85,8 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
         case .mirror:       return 2
         case .quickActions, .systemStats, .clipboard: return 2
         case .openApp:      return 1
+        case .mediaScrubber: return 3
+        case .nextEvent:    return 2
         default:            return 2
         }
     }
@@ -87,7 +95,7 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
     var minimumSpan: Int {
         switch self {
         case .nowPlaying, .weather, .agents: return 3
-        case .calendar, .notes, .timer, .clipboard: return 2
+        case .calendar, .notes, .timer, .clipboard, .mediaScrubber: return 2
         default: return 1
         }
     }
@@ -95,6 +103,35 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
     /// Only "Open app" makes sense more than once, since each points somewhere
     /// different. The rest would simply say the same thing twice.
     var allowsDuplicates: Bool { self == .openApp }
+}
+
+/// When a tile is shown. Most are always on, but the point of a small screen
+/// is that what it shows can change with what you are doing: a camera mirror
+/// matters in the minute before a call and never otherwise.
+enum TileCondition: String, CaseIterable, Identifiable {
+    case always = "Always"
+    case mediaPlaying = "While media is playing"
+    case mediaIdle = "While nothing is playing"
+    case meetingSoon = "Before a video meeting"
+    case notchOpen = "Only when I open the notch"
+    case focusActive = "During a focus session"
+    case charging = "While charging"
+    case onBattery = "While on battery"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .always:       return "infinity"
+        case .mediaPlaying: return "play.fill"
+        case .mediaIdle:    return "pause"
+        case .meetingSoon:  return "video.fill"
+        case .notchOpen:    return "hand.tap"
+        case .focusActive:  return "cup.and.saucer.fill"
+        case .charging:     return "bolt.fill"
+        case .onBattery:    return "battery.50"
+        }
+    }
 }
 
 /// One tile on the grid.
@@ -105,14 +142,17 @@ struct HomeTile: Identifiable, Equatable {
     var span: Int
     /// Path of the app to launch, for `.openApp`.
     var appPath: String?
+    var condition: TileCondition
 
     init(id: UUID = UUID(), kind: HomeTileKind, row: Int? = nil,
-         span: Int? = nil, appPath: String? = nil) {
+         span: Int? = nil, appPath: String? = nil,
+         condition: TileCondition = .always) {
         self.id = id
         self.kind = kind
         self.row = row ?? kind.naturalRow
         self.span = span ?? kind.defaultSpan
         self.appPath = appPath
+        self.condition = condition
     }
 
     var appName: String? {
@@ -122,7 +162,7 @@ struct HomeTile: Identifiable, Equatable {
     /// `kind ␟ row ␟ span ␟ path`, so the whole layout is a plain string array
     /// in preferences and stays readable in `defaults read`.
     var encoded: String {
-        [kind.rawValue, String(row), String(span), appPath ?? ""]
+        [kind.rawValue, String(row), String(span), appPath ?? "", condition.rawValue]
             .joined(separator: "\u{1F}")
     }
 
@@ -132,7 +172,13 @@ struct HomeTile: Identifiable, Equatable {
         let row = parts.count > 1 ? Int(parts[1]) ?? kind.naturalRow : kind.naturalRow
         let span = parts.count > 2 ? Int(parts[2]) ?? kind.defaultSpan : kind.defaultSpan
         let path = parts.count > 3 && !parts[3].isEmpty ? parts[3] : nil
-        return HomeTile(kind: kind, row: row, span: max(span, kind.minimumSpan), appPath: path)
+        // Layouts saved before conditions existed have no fifth field and are
+        // read as always-on, which is what they were.
+        let condition = parts.count > 4
+            ? TileCondition(rawValue: parts[4]) ?? .always
+            : .always
+        return HomeTile(kind: kind, row: row, span: max(span, kind.minimumSpan),
+                        appPath: path, condition: condition)
     }
 }
 
@@ -144,7 +190,7 @@ enum HomeLayout {
         [
             HomeTile(kind: .nowPlaying, row: 0, span: 6),
             HomeTile(kind: .calendar, row: 0, span: 3),
-            HomeTile(kind: .mirror, row: 0, span: 2),
+            HomeTile(kind: .mirror, row: 0, span: 2, condition: .meetingSoon),
             HomeTile(kind: .quickActions, row: 1, span: 2),
             HomeTile(kind: .systemStats, row: 1, span: 2),
             HomeTile(kind: .battery, row: 1, span: 2)
