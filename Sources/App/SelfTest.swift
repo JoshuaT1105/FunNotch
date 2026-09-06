@@ -284,6 +284,29 @@ enum SelfTest {
         check("a focus session stops", !FocusManager.shared.isActive)
         Settings.shared.focusBlockWebsites = savedBlocking
 
+        // MARK: Home layout
+        //
+        // The layout lives in preferences as encoded strings. A round trip that
+        // silently dropped a field would reset everyone's home screen on the
+        // next launch, and they would have no idea why.
+        let sample = HomeTile(kind: .openApp, row: 1, span: 3, appPath: "/Applications/Safari.app")
+        let restored = HomeTile.decode(sample.encoded)
+        check("a home tile survives encoding",
+              restored?.kind == sample.kind && restored?.row == sample.row
+              && restored?.span == sample.span && restored?.appPath == sample.appPath,
+              detail: sample.encoded.replacingOccurrences(of: "\u{1F}", with: "|"))
+
+        let defaults = HomeLayout.default
+        let roundTripped = defaults.map(\.encoded).compactMap(HomeTile.decode)
+        check("the default layout survives encoding",
+              roundTripped.count == defaults.count
+              && zip(roundTripped, defaults).allSatisfy { $0.kind == $1.kind && $0.span == $1.span },
+              detail: "\(defaults.count) tiles")
+
+        check("every tile kind has a usable default span",
+              HomeTileKind.allCases.allSatisfy { $0.defaultSpan >= $0.minimumSpan },
+              detail: "\(HomeTileKind.allCases.count) kinds")
+
         // MARK: Notes
         //
         // The whole point of the notes tab is that it lands as a real file on

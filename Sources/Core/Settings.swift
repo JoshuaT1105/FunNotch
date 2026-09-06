@@ -422,24 +422,18 @@ final class Settings: ObservableObject {
         set { write("idleRightWidgets", newValue.map(\.rawValue)) }
     }
 
-    /// The strip along the bottom of the home tab, in order.
-    var homePanels: [HomePanelInstance] {
+    /// The home tab's grid of tiles.
+    var homeTiles: [HomeTile] {
         get {
-            guard let raw = store.stringArray(forKey: "homePanels") else {
-                return [
-                    HomePanelInstance(panel: .quickActions),
-                    HomePanelInstance(panel: .systemStats),
-                    HomePanelInstance(panel: .battery)
-                ]
-            }
-            return raw.compactMap(HomePanelInstance.decode)
+            guard let raw = store.stringArray(forKey: "homeTiles") else { return HomeLayout.default }
+            let tiles = raw.compactMap(HomeTile.decode)
+            return tiles.isEmpty ? HomeLayout.default : tiles
         }
-        set { write("homePanels", newValue.map(\.encoded)) }
+        set { write("homeTiles", newValue.map(\.encoded)) }
     }
 
-    var homeStripEnabled: Bool {
-        get { bool("homeStripEnabled", true) }
-        set { write("homeStripEnabled", newValue) }
+    func resetHomeLayout() {
+        homeTiles = HomeLayout.default
     }
 
     private func widgetList(_ key: String, default fallback: [NotchWidget]) -> [NotchWidget] {

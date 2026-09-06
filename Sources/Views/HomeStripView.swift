@@ -13,31 +13,13 @@
 
 import SwiftUI
 
-struct HomeStripView: View {
-    @ObservedObject private var settings = Settings.shared
+/// Dispatches a compact tile to its panel. The grid owns placement now; these
+/// are just the contents.
+struct HomeStripPanel: View {
+    let tile: HomeTile
 
     var body: some View {
-        let panels = settings.homePanels
-        if settings.homeStripEnabled, !panels.isEmpty {
-            GeometryReader { geo in
-                let total = panels.reduce(0) { $0 + $1.panel.weight }
-                HStack(spacing: 6) {
-                    ForEach(panels) { instance in
-                        PanelChrome {
-                            view(for: instance)
-                        }
-                        .frame(width: (geo.size.width - CGFloat(panels.count - 1) * 6)
-                               * instance.panel.weight / total)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func view(for instance: HomePanelInstance) -> some View {
-        switch instance.panel {
-        case .openApp:      OpenAppPanel(path: instance.appPath)
+        switch tile.kind {
         case .quickActions: QuickActionsPanel()
         case .systemStats:  SystemStatsPanel()
         case .battery:      BatteryPanel()
@@ -45,15 +27,16 @@ struct HomeStripView: View {
         case .focusStreak:  FocusStreakPanel()
         case .recentShelf:  RecentShelfPanel()
         case .clipboard:    ClipboardPanel()
-        case .notes:        NotesPanel()
         case .wifi:         WiFiPanel()
+        case .openApp:      OpenAppPanel(path: tile.appPath)
+        default:            EmptyView()
         }
     }
 }
 
 /// Every panel sits in the same box, so the strip reads as one row rather than
 /// a pile of unrelated widgets.
-private struct PanelChrome<Content: View>: View {
+struct HomePanelChrome<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {

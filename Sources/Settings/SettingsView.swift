@@ -310,15 +310,18 @@ private struct AppearanceSettings: View {
                 }
             }
 
-            Section("Home strip") {
-                Toggle("Show a strip along the bottom of the home tab", isOn: $settings.homeStripEnabled)
-                HomePanelListEditor(
-                    panels: Binding(
-                        get: { settings.homePanels },
-                        set: { settings.homePanels = $0 }
-                    )
-                )
-                .disabled(!settings.homeStripEnabled)
+            Section("Home screen") {
+                LabeledContent("Layout") {
+                    Button("Customise…") {
+                        LayoutEditorWindowController.shared.show()
+                    }
+                }
+                Text("Choose which widgets appear on the home tab, how wide each one is, and which row it sits in.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Reset to default layout") {
+                    Settings.shared.resetHomeLayout()
+                }
             }
 
             Section("Beside the notch") {
@@ -625,100 +628,6 @@ private struct WidgetListEditor: View {
     /// Offering the same widget twice on one side is never what you want.
     private var available: [NotchWidget] {
         NotchWidget.allCases.filter { !widgets.contains($0) }
-    }
-}
-
-private struct HomePanelListEditor: View {
-    @Binding var panels: [HomePanelInstance]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Panels, left to right")
-                Spacer()
-                Menu {
-                    ForEach(available) { panel in
-                        Button {
-                            panels.append(HomePanelInstance(panel: panel))
-                        } label: {
-                            Label(panel.rawValue, systemImage: panel.symbol)
-                        }
-                    }
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .disabled(available.isEmpty)
-            }
-
-            if panels.isEmpty {
-                Text("The strip is empty, so nothing is shown.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(panels.enumerated()), id: \.element.id) { index, instance in
-                    HStack(spacing: 6) {
-                        Image(systemName: instance.panel.symbol)
-                            .frame(width: 16)
-                            .foregroundStyle(.secondary)
-                        Text(instance.panel.rawValue)
-
-                        if instance.panel == .openApp {
-                            Button(instance.appName ?? "Choose app…") {
-                                chooseApp(for: index)
-                            }
-                            .buttonStyle(.link)
-                            .font(.callout)
-                        }
-
-                        Spacer()
-                        Button {
-                            panels.swapAt(index, index - 1)
-                        } label: { Image(systemName: "chevron.up") }
-                        .buttonStyle(.plain)
-                        .disabled(index == 0)
-                        Button {
-                            panels.swapAt(index, index + 1)
-                        } label: { Image(systemName: "chevron.down") }
-                        .buttonStyle(.plain)
-                        .disabled(index == panels.count - 1)
-                        Button {
-                            panels.remove(at: index)
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .font(.callout)
-                }
-
-                Text("The strip divides its width between whatever is here, so three or four panels read better than eight. \"Open app\" can be added as many times as you like.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func chooseApp(for index: Int) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.application]
-        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.prompt = "Choose"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        panels[index].appPath = url.path
-    }
-
-    /// Most panels say the same thing twice if repeated, so they drop off the
-    /// menu once used. "Open app" is the exception and always stays.
-    private var available: [HomePanel] {
-        HomePanel.allCases.filter { panel in
-            panel.allowsDuplicates || !panels.contains { $0.panel == panel }
-        }
     }
 }
 

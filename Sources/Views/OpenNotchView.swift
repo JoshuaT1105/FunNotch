@@ -117,6 +117,16 @@ struct NotchHeader: View {
                 }
 
                 if settings.settingsIconInNotch {
+                    // Sits beside the gear: the home screen is the thing you
+                    // are looking at when you decide you want it rearranged,
+                    // so the way to rearrange it belongs here rather than three
+                    // levels into Settings.
+                    HoverButton(systemName: "square.grid.2x2", size: 13, padding: 5) {
+                        LayoutEditorWindowController.shared.show()
+                        viewModel.close()
+                    }
+                    .help("Customise the home screen")
+
                     HoverButton(systemName: "gearshape", size: 13, padding: 5) {
                         SettingsWindowController.shared.show()
                         viewModel.close()
@@ -178,48 +188,12 @@ private struct TabChip: View {
 // MARK: - Home
 
 struct NotchHomeView: View {
-    @EnvironmentObject private var viewModel: NotchViewModel
-    @EnvironmentObject private var settings: Settings
-    @ObservedObject private var music = MusicManager.shared
-
     var body: some View {
-        VStack(spacing: 8) {
-            main
-            HomeStripView()
-                .frame(height: 46)
-        }
-        .padding(.top, 10)
-    }
-
-    private var main: some View {
-        HStack(alignment: .top, spacing: 14) {
-            // With nothing playing, the artwork and transport are an empty
-            // rectangle with a placeholder note in it. Weather is a better use
-            // of the same space, and it goes away the moment music starts.
-            if music.track.isEmpty, settings.showWeatherWhenIdle {
-                WeatherPane()
-                    .frame(minWidth: 232, maxWidth: .infinity)
-                    .frame(height: 96)
-            } else {
-                AlbumArtwork()
-                PlayerControls()
-                    .frame(minWidth: 170)
-            }
-
-            if settings.showCalendar {
-                CalendarPane()
-                    .frame(width: 186)
-            }
-
-            if settings.showMirror {
-                MirrorPane()
-                    .frame(width: 96)
-            }
-        }
+        HomeGridView()
     }
 }
 
-private struct AlbumArtwork: View {
+struct AlbumArtwork: View {
     @ObservedObject private var music = MusicManager.shared
     @EnvironmentObject private var settings: Settings
     @State private var isHovering = false
@@ -279,7 +253,7 @@ private struct AlbumArtwork: View {
     }
 }
 
-private struct PlayerControls: View {
+struct PlayerControls: View {
     @ObservedObject private var music = MusicManager.shared
     @EnvironmentObject private var settings: Settings
 
@@ -440,7 +414,7 @@ private struct PlayerControls: View {
 
 // MARK: - Mirror
 
-private struct MirrorPane: View {
+struct MirrorPane: View {
     @ObservedObject private var webcam = WebcamManager.shared
     @EnvironmentObject private var settings: Settings
 

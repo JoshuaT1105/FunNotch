@@ -165,6 +165,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "Customise Home Screen…", action: #selector(customiseHome), keyEquivalent: "").target = self
 
         let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         updates.target = self
@@ -220,6 +221,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func clearShelf() {
         ShelfManager.shared.clear()
+    }
+
+    @objc private func customiseHome() {
+        LayoutEditorWindowController.shared.show()
     }
 
     @objc private func checkForUpdates() {
