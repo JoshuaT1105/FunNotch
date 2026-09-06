@@ -258,19 +258,6 @@ final class Settings: ObservableObject {
         set { write("mirrorShape", newValue.rawValue) }
     }
 
-    var settingsIconInNotch: Bool {
-        get { bool("settingsIconInNotch", true) }
-        set { write("settingsIconInNotch", newValue) }
-    }
-
-    /// Drop shadow under the expanded panel. Off by default: the notch hangs
-    /// over other people's windows, and anything it paints outside its own
-    /// silhouette shows up as a smudge on them.
-    var enableShadow: Bool {
-        get { bool("enableShadow", false) }
-        set { write("enableShadow", newValue) }
-    }
-
     // MARK: - Border
     //
     // A hairline traced along the notch's own outline. Unlike the shadow it
@@ -314,19 +301,9 @@ final class Settings: ObservableObject {
         }
     }
 
-    var cornerRadiusScaling: Bool {
-        get { bool("cornerRadiusScaling", true) }
-        set { write("cornerRadiusScaling", newValue) }
-    }
-
     var showNotHumanFace: Bool {
         get { bool("showNotHumanFace", false) }
         set { write("showNotHumanFace", newValue) }
-    }
-
-    var tileShowLabels: Bool {
-        get { bool("tileShowLabels", false) }
-        set { write("tileShowLabels", newValue) }
     }
 
     var showCalendar: Bool {
@@ -342,6 +319,11 @@ final class Settings: ObservableObject {
     var playerColorTinting: Bool {
         get { bool("playerColorTinting", true) }
         set { write("playerColorTinting", newValue) }
+    }
+
+    var coloredSpectrogram: Bool {
+        get { bool("coloredSpectrogram", true) }
+        set { write("coloredSpectrogram", newValue) }
     }
 
     var useMusicVisualizer: Bool {
@@ -494,23 +476,6 @@ final class Settings: ObservableObject {
         return raw.compactMap(NotchWidget.init(rawValue:))
     }
 
-    // MARK: - Gestures
-
-    var enableGestures: Bool {
-        get { bool("enableGestures", true) }
-        set { write("enableGestures", newValue) }
-    }
-
-    var closeGestureEnabled: Bool {
-        get { bool("closeGestureEnabled", true) }
-        set { write("closeGestureEnabled", newValue) }
-    }
-
-    var gestureSensitivity: CGFloat {
-        get { number("gestureSensitivity", 200) }
-        set { write("gestureSensitivity", Double(newValue)) }
-    }
-
     // MARK: - Media playback
 
     var mediaController: MediaControllerType {
@@ -527,11 +492,6 @@ final class Settings: ObservableObject {
     var showPageAccessHint: Bool {
         get { bool("showPageAccessHint", true) }
         set { write("showPageAccessHint", newValue) }
-    }
-
-    var coloredSpectrogram: Bool {
-        get { bool("coloredSpectrogram", true) }
-        set { write("coloredSpectrogram", newValue) }
     }
 
     var enableSneakPeek: Bool {
@@ -894,11 +854,6 @@ final class Settings: ObservableObject {
         set { write("showNotes", newValue) }
     }
 
-    var showGame: Bool {
-        get { bool("showGame", true) }
-        set { write("showGame", newValue) }
-    }
-
     var gameHighScore: Int {
         get { integer("gameHighScore", 0) }
         set { write("gameHighScore", newValue) }
@@ -920,11 +875,10 @@ final class Settings: ObservableObject {
         "launchAtLogin", "openNotchOnHover", "minimumHoverDuration", "enableHaptics",
         "extendHoverArea", "notchHeightMode", "nonNotchHeightMode", "notchHeight", "nonNotchHeight",
         "notchWidthPadding", "showOnLockScreen", "hideFromScreenRecording", "showEmojis",
-        "showMirror", "mirrorShape", "settingsIconInNotch", "enableShadow",
-        "cornerRadiusScaling", "showNotHumanFace", "tileShowLabels", "showCalendar", "sliderColor",
+        "showMirror", "mirrorShape", "showNotHumanFace", "showCalendar", "sliderColor",
         "playerColorTinting", "useMusicVisualizer", "useCustomAccentColor", "customAccentColorData",
-        "enableGestures", "closeGestureEnabled", "gestureSensitivity", "mediaController",
-        "coloredSpectrogram", "enableSneakPeek", "sneakPeekStyles", "waitInterval",
+        "mediaController", "coloredSpectrogram", "enableSneakPeek", "sneakPeekStyles",
+        "waitInterval",
         "showShuffleAndRepeat", "hideNotchOption", "showPowerStatusNotifications",
         "showBatteryIndicator", "showBatteryPercentage", "showPowerStatusIcons",
         "enableDownloadListener", "selectedDownloadIndicatorStyle", "selectedDownloadIconStyle",
@@ -937,7 +891,7 @@ final class Settings: ObservableObject {
         "focusPomodoro", "focusBreakMinutes", "focusBlockedApps", "focusStartShortcut",
         "focusEndShortcut", "focusSessionsCompleted", "focusMinutesTotal",
         "catchDownloads", "downloadsToShelf", "shelfExpiryHours", "shelfFolderTargets",
-        "clipboardPinned", "themes", "activeThemeName", "gameHighScore", "showGame",
+        "clipboardPinned", "themes", "activeThemeName", "gameHighScore",
         "catchScreenshots", "catchScreenRecordings", "clipboardHistoryEnabled",
         "clipboardHistoryLimit", "bluetoothActivity",
         "focusShowInClosedNotch", "focusPauseMusic", "showPageAccessHint",

@@ -16,8 +16,6 @@ final class NotchWindowManager: ObservableObject {
 
     private(set) var controllers: [NotchWindowController] = []
     private var cancellables = Set<AnyCancellable>()
-    private var gestureAccumulator: CGFloat = 0
-    private var lastGestureReset = Date()
 
     private let settings = Settings.shared
 
@@ -60,7 +58,6 @@ final class NotchWindowManager: ObservableObject {
 
         let tracker = MouseTracker.shared
         tracker.onMove = { [weak self] point in self?.handlePointer(point) }
-        tracker.onScroll = { [weak self] point, delta in self?.handleScroll(at: point, delta: delta) }
         tracker.onClick = { [weak self] point in self?.handleClick(at: point) }
         tracker.onDragStateChange = { [weak self] dragging in
             self?.viewModels.forEach { $0.dragDetectorTargeting = dragging }
@@ -135,32 +132,6 @@ final class NotchWindowManager: ObservableObject {
         // Tapping the collapsed notch opens it even when hover-to-open is off.
         if !settings.openNotchOnHover {
             controller.viewModel.open()
-        }
-    }
-
-    private func handleScroll(at point: CGPoint, delta: CGFloat) {
-        guard settings.enableGestures else { return }
-        guard let controller = controllers.first(where: { $0.hoverRect.contains(point) }) else {
-            gestureAccumulator = 0
-            return
-        }
-
-        // Reset the accumulator between distinct swipes.
-        if Date().timeIntervalSince(lastGestureReset) > 0.4 {
-            gestureAccumulator = 0
-        }
-        lastGestureReset = Date()
-        gestureAccumulator += delta
-
-        let threshold = settings.gestureSensitivity / 10
-        let viewModel = controller.viewModel
-
-        if gestureAccumulator < -threshold, viewModel.notchState == .closed {
-            gestureAccumulator = 0
-            viewModel.open()
-        } else if gestureAccumulator > threshold, viewModel.notchState == .open, settings.closeGestureEnabled {
-            gestureAccumulator = 0
-            viewModel.close()
         }
     }
 

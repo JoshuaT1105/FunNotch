@@ -40,11 +40,9 @@ struct ContentView: View {
             // as well and sit a few points above the shape it outlines.
             .overlay(border)
             .padding(.top, viewModel.islandTopGap)
-            .shadow(
-                color: .black.opacity(settings.enableShadow && viewModel.notchState == .open ? 0.55 : 0),
-                radius: 14,
-                y: 6
-            )
+            // No drop shadow: the panel hangs over other people's windows, and
+            // anything it paints outside its own silhouette reads as a smudge
+            // on them.
             // Drops are handled in AppKit by `PassthroughContentView`, which
             // sits above SwiftUI's hit-test gate and registers the exact types
             // Finder actually puts on the pasteboard.

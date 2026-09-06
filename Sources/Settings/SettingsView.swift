@@ -153,16 +153,6 @@ private struct GeneralSettings: View {
                 Toggle("Haptic feedback", isOn: $settings.enableHaptics)
             }
 
-            Section("Gestures") {
-                Toggle("Swipe down on the notch to open", isOn: $settings.enableGestures)
-                Toggle("Swipe up to close", isOn: $settings.closeGestureEnabled)
-                    .disabled(!settings.enableGestures)
-                LabeledContent("Sensitivity") {
-                    Slider(value: $settings.gestureSensitivity, in: 50 ... 400, step: 10)
-                        .disabled(!settings.enableGestures)
-                }
-            }
-
             Section("HUD") {
                 Toggle("Show volume, brightness and backlight in the notch", isOn: $settings.hudEnabled)
                     .onChange(of: settings.hudEnabled) { _, on in
@@ -363,28 +353,6 @@ private struct AppearanceSettings: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Style") {
-                Toggle("Drop shadow under the open notch", isOn: $settings.enableShadow)
-                Toggle("Scale corner radius when open", isOn: $settings.cornerRadiusScaling)
-                Toggle("Show tab labels", isOn: $settings.tileShowLabels)
-                Toggle("Settings button in the notch", isOn: $settings.settingsIconInNotch)
-                Toggle("Show the game tab", isOn: $settings.showGame)
-            }
-
-            Section("Accent colour") {
-                Toggle("Use a custom accent colour", isOn: $settings.useCustomAccentColor)
-
-                AccentSwatches()
-
-                if settings.useCustomAccentColor {
-                    ColorPicker("Exact colour", selection: $settings.customAccentColor)
-                }
-
-                Text("The accent tints shuffle and repeat, the focus ring, the drop zone, and anything set to \"Accent colour\" below.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Border") {
                 Toggle("Outline the notch", isOn: $settings.notchBorderEnabled)
 
@@ -439,21 +407,6 @@ private struct AppearanceSettings: View {
                     .disabled(settings.notchTintIntensity == 0)
             }
 
-            Section("Element colours") {
-                Picker("Progress bar", selection: $settings.sliderColor) {
-                    ForEach(SliderColorEnum.allCases) { colour in
-                        Text(colour.rawValue).tag(colour)
-                    }
-                }
-                Picker("Spectrum bars", selection: $settings.spectrumColor) {
-                    ForEach(SliderColorEnum.allCases) { colour in
-                        Text(colour.rawValue).tag(colour)
-                    }
-                }
-                .disabled(!settings.coloredSpectrogram)
-                Toggle("Colour the spectrum bars", isOn: $settings.coloredSpectrogram)
-            }
-
             // Whether the mirror and the weather appear at all is decided by
             // the home screen layout now, so only the settings that change how
             // they look are left here.
@@ -476,39 +429,6 @@ private struct AppearanceSettings: View {
             }
         }
         .formStyle(.grouped)
-    }
-}
-
-/// One-click accent colours. Picking "System" turns the override back off.
-private struct AccentSwatches: View {
-    @ObservedObject private var settings = Settings.shared
-
-    private let columns = [GridItem(.adaptive(minimum: 30), spacing: 8)]
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(AccentPreset.allCases) { preset in
-                Swatch(
-                    color: preset.color,
-                    label: preset.rawValue,
-                    isSelected: isSelected(preset)
-                ) {
-                    if preset == .system {
-                        settings.useCustomAccentColor = false
-                    } else {
-                        settings.customAccentColor = preset.color
-                        settings.useCustomAccentColor = true
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func isSelected(_ preset: AccentPreset) -> Bool {
-        if preset == .system { return !settings.useCustomAccentColor }
-        guard settings.useCustomAccentColor else { return false }
-        return NSColor(settings.customAccentColor).isApproximately(NSColor(preset.color))
     }
 }
 
@@ -680,7 +600,7 @@ private struct ThemeSettings: View {
                     Button("Save", action: save)
                         .disabled(trimmedName.isEmpty)
                 }
-                Text("Captures the accent colour, notch tint and strength, glow, and the progress and spectrum colours from the Appearance tab.")
+                Text("Captures the accent colour, the notch tint and its strength, and the progress and spectrum colours. Applying a theme is how all of those get set.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

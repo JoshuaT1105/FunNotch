@@ -96,9 +96,9 @@ struct NotchHeader: View {
                         tab: tab,
                         isSelected: viewModel.currentTab == tab,
                         // The header shares its row with the camera cutout, so
-                        // labels only fit while there are few enough tabs.
-                        showsLabel: settings.tileShowLabels
-                            || (viewModel.currentTab == tab && availableTabs.count <= 4)
+                        // only the selected tab is labelled, and only while
+                        // there are few enough tabs for it to fit.
+                        showsLabel: viewModel.currentTab == tab && availableTabs.count <= 4
                     ) {
                         withAnimation(.notchContent) { viewModel.currentTab = tab }
                     }
@@ -116,21 +116,19 @@ struct NotchHeader: View {
                     BatteryPill()
                 }
 
-                if settings.settingsIconInNotch {
-                    // Sits beside the gear: the home screen is the thing you
-                    // are looking at when you decide you want it rearranged,
-                    // so the way to rearrange it belongs here rather than three
-                    // levels into Settings.
-                    HoverButton(systemName: "square.grid.2x2", size: 13, padding: 5) {
-                        LayoutEditorWindowController.shared.show()
-                        viewModel.close()
-                    }
-                    .help("Customise the home screen")
+                // Sits beside the gear: the home screen is the thing you are
+                // looking at when you decide you want it rearranged, so the way
+                // to rearrange it belongs here rather than three levels into
+                // Settings.
+                HoverButton(systemName: "square.grid.2x2", size: 13, padding: 5) {
+                    LayoutEditorWindowController.shared.show()
+                    viewModel.close()
+                }
+                .help("Customise the home screen")
 
-                    HoverButton(systemName: "gearshape", size: 13, padding: 5) {
-                        SettingsWindowController.shared.show()
-                        viewModel.close()
-                    }
+                HoverButton(systemName: "gearshape", size: 13, padding: 5) {
+                    SettingsWindowController.shared.show()
+                    viewModel.close()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -146,7 +144,7 @@ struct NotchHeader: View {
             case .timer: return settings.showTimer
             // A focus session is a promise not to get distracted, and a game in
             // the notch is the most distracting thing in here.
-            case .game: return settings.showGame && !FocusManager.shared.isActive
+            case .game: return !FocusManager.shared.isActive
             default: return true
             }
         }

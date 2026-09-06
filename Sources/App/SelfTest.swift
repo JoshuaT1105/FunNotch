@@ -934,15 +934,6 @@ enum SelfTest {
         let farLeft = contentView.hitTest(NSPoint(x: 20, y: windowSize.height - 40))
         check("mid-drag, the catch area spans the window width", farLeft != nil)
 
-        // The shadow paints outside the notch's silhouette, onto whatever
-        // window happens to be under it, so it is opt-in. Check what a fresh
-        // install gets, not what this Mac has stored — a deliberate "yes" from
-        // the user must not read as a failure.
-        let store = UserDefaults.standard
-        let storedShadow = store.object(forKey: "enableShadow")
-        store.removeObject(forKey: "enableShadow")
-        check("out of the box the drop shadow is off", !Settings.shared.enableShadow)
-        store.set(storedShadow, forKey: "enableShadow")
         check(
             "the window leaves room for the shadow on every side",
             windowSize.width - openNotchSize.width == shadowPadding * 2

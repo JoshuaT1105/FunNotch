@@ -376,13 +376,11 @@ final class NotchViewModel: ObservableObject {
     }
 
     var topCornerRadius: CGFloat {
-        guard settings.cornerRadiusScaling else { return cornerRadiusInsets.closed.top }
-        return notchState == .open ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.top
+        notchState == .open ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.top
     }
 
     var bottomCornerRadius: CGFloat {
-        guard settings.cornerRadiusScaling else { return cornerRadiusInsets.closed.bottom }
-        return notchState == .open ? cornerRadiusInsets.opened.bottom : cornerRadiusInsets.closed.bottom
+        notchState == .open ? cornerRadiusInsets.opened.bottom : cornerRadiusInsets.closed.bottom
     }
 }
 
