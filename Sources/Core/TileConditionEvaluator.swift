@@ -2,44 +2,44 @@
 //  TileConditionEvaluator.swift
 //  FunNotch
 //
-//  Decides whether a tile's condition is currently met.
+//  Picks which layout the home tab should be showing.
 //
 
 import Foundation
 import SwiftUI
 
 @MainActor
-enum TileConditionEvaluator {
-    /// How long before a video meeting the "before a meeting" tiles appear.
+enum LayoutCaseResolver {
+    /// How long before a video meeting the meeting layout takes over.
     static let meetingLeadTime: TimeInterval = 10 * 60
 
-    static func isSatisfied(_ condition: TileCondition, notchIsOpen: Bool) -> Bool {
-        switch condition {
-        case .always:
-            return true
-        case .mediaPlaying:
-            return MusicManager.shared.isPlaying
-        case .mediaIdle:
-            return !MusicManager.shared.isPlaying
-        case .meetingSoon:
-            return meetingIsImminent
-        case .notchOpen:
-            return notchIsOpen
-        case .focusActive:
-            return FocusManager.shared.isActive
-        case .charging:
-            return BatteryManager.shared.isCharging || BatteryManager.shared.isPluggedIn
-        case .onBattery:
-            return !BatteryManager.shared.isPluggedIn
+    /// The most specific case that both applies and has a layout of its own.
+    /// A case the user has not customised is skipped rather than showing an
+    /// empty notch.
+    static func active(settings: Settings) -> LayoutCase {
+        for candidate in LayoutCase.priority
+        where isSatisfied(candidate) && settings.homeTiles(for: candidate) != nil {
+            return candidate
+        }
+        return .standard
+    }
+
+    static func isSatisfied(_ layoutCase: LayoutCase) -> Bool {
+        switch layoutCase {
+        case .standard:     return true
+        case .mediaPlaying: return MusicManager.shared.isPlaying
+        case .meetingSoon:  return meetingIsImminent
+        case .focusActive:  return FocusManager.shared.isActive
+        case .charging:     return BatteryManager.shared.isPluggedIn
         }
     }
 
     /// True when the next agenda item is a video call starting shortly, or one
-    /// that has already started and is presumably still running.
+    /// already under way.
     ///
-    /// Only items with a real meeting link count. "Before a meeting" is about
-    /// checking your camera before you appear on it, and a dentist reminder is
-    /// not that.
+    /// Only items with a real meeting link count. This layout exists so you can
+    /// check your camera before you appear on it, and a dentist reminder is not
+    /// that.
     private static var meetingIsImminent: Bool {
         guard let next = CalendarManager.shared.nextItem,
               next.meetingURL != nil,
@@ -49,7 +49,6 @@ enum TileConditionEvaluator {
 
         let untilStart = start.timeIntervalSinceNow
         if untilStart > meetingLeadTime { return false }
-        // Still counted as imminent while the meeting runs, up to its end.
         if let end = next.end, Date() > end { return false }
         return untilStart > -3600
     }

@@ -105,36 +105,49 @@ enum HomeTileKind: String, CaseIterable, Identifiable {
     var allowsDuplicates: Bool { self == .openApp }
 }
 
-/// When a tile is shown. Most are always on, but the point of a small screen
-/// is that what it shows can change with what you are doing: a camera mirror
-/// matters in the minute before a call and never otherwise.
-enum TileCondition: String, CaseIterable, Identifiable {
-    case always = "Always"
-    case mediaPlaying = "While media is playing"
-    case mediaIdle = "While nothing is playing"
-    case meetingSoon = "Before a video meeting"
-    case notchOpen = "Only when I open the notch"
-    case focusActive = "During a focus session"
-    case charging = "While charging"
-    case onBattery = "While on battery"
+/// A situation the notch can have its own layout for.
+///
+/// Modelled as whole layouts rather than a condition on each tile. "While media
+/// is playing, show me this instead" is a different notch, not the same notch
+/// with two things hidden — and editing it as a notch is far easier to reason
+/// about than reading a condition off every tile in turn.
+enum LayoutCase: String, CaseIterable, Identifiable {
+    case standard = "Default"
+    case meetingSoon = "Before a meeting"
+    case mediaPlaying = "Media playing"
+    case focusActive = "Focus session"
+    case charging = "Charging"
 
     var id: String { rawValue }
 
     var symbol: String {
         switch self {
-        case .always:       return "infinity"
-        case .mediaPlaying: return "play.fill"
-        case .mediaIdle:    return "pause"
+        case .standard:     return "house"
         case .meetingSoon:  return "video.fill"
-        case .notchOpen:    return "hand.tap"
+        case .mediaPlaying: return "play.fill"
         case .focusActive:  return "cup.and.saucer.fill"
         case .charging:     return "bolt.fill"
-        case .onBattery:    return "battery.50"
         }
+    }
+
+    var explanation: String {
+        switch self {
+        case .standard:     return "Whenever nothing more specific applies."
+        case .meetingSoon:  return "In the ten minutes before a calendar event with a video link, and while it runs."
+        case .mediaPlaying: return "While something is playing."
+        case .focusActive:  return "During a focus session."
+        case .charging:     return "While plugged in."
+        }
+    }
+
+    /// Checked in this order, so the most specific situation wins. A meeting
+    /// beats music, because you are about to be on camera either way.
+    static var priority: [LayoutCase] {
+        [.meetingSoon, .focusActive, .mediaPlaying, .charging]
     }
 }
 
-/// One tile on the grid.
+/// One tile on the grid./// One tile on the grid.
 struct HomeTile: Identifiable, Equatable {
     let id: UUID
     var kind: HomeTileKind
@@ -142,17 +155,14 @@ struct HomeTile: Identifiable, Equatable {
     var span: Int
     /// Path of the app to launch, for `.openApp`.
     var appPath: String?
-    var condition: TileCondition
 
     init(id: UUID = UUID(), kind: HomeTileKind, row: Int? = nil,
-         span: Int? = nil, appPath: String? = nil,
-         condition: TileCondition = .always) {
+         span: Int? = nil, appPath: String? = nil) {
         self.id = id
         self.kind = kind
         self.row = row ?? kind.naturalRow
         self.span = span ?? kind.defaultSpan
         self.appPath = appPath
-        self.condition = condition
     }
 
     var appName: String? {
@@ -162,7 +172,7 @@ struct HomeTile: Identifiable, Equatable {
     /// `kind ␟ row ␟ span ␟ path`, so the whole layout is a plain string array
     /// in preferences and stays readable in `defaults read`.
     var encoded: String {
-        [kind.rawValue, String(row), String(span), appPath ?? "", condition.rawValue]
+        [kind.rawValue, String(row), String(span), appPath ?? ""]
             .joined(separator: "\u{1F}")
     }
 
@@ -172,13 +182,11 @@ struct HomeTile: Identifiable, Equatable {
         let row = parts.count > 1 ? Int(parts[1]) ?? kind.naturalRow : kind.naturalRow
         let span = parts.count > 2 ? Int(parts[2]) ?? kind.defaultSpan : kind.defaultSpan
         let path = parts.count > 3 && !parts[3].isEmpty ? parts[3] : nil
-        // Layouts saved before conditions existed have no fifth field and are
-        // read as always-on, which is what they were.
-        let condition = parts.count > 4
-            ? TileCondition(rawValue: parts[4]) ?? .always
-            : .always
+        // A fifth field is a per-tile condition from the version before cases
+        // existed. It is ignored rather than rejected, so an old layout still
+        // loads instead of silently reverting to the default.
         return HomeTile(kind: kind, row: row, span: max(span, kind.minimumSpan),
-                        appPath: path, condition: condition)
+                        appPath: path)
     }
 }
 
@@ -190,11 +198,48 @@ enum HomeLayout {
         [
             HomeTile(kind: .nowPlaying, row: 0, span: 6),
             HomeTile(kind: .calendar, row: 0, span: 3),
-            HomeTile(kind: .mirror, row: 0, span: 2, condition: .meetingSoon),
+            HomeTile(kind: .mirror, row: 0, span: 2),
             HomeTile(kind: .quickActions, row: 1, span: 2),
             HomeTile(kind: .systemStats, row: 1, span: 2),
             HomeTile(kind: .battery, row: 1, span: 2)
         ]
+    }
+
+    /// What a case starts as when you first give it its own layout. Better
+    /// than an empty notch, which is a blank page problem.
+    static func starter(for layoutCase: LayoutCase) -> [HomeTile] {
+        switch layoutCase {
+        case .standard:
+            return `default`
+        case .meetingSoon:
+            return [
+                HomeTile(kind: .mirror, row: 0, span: 4),
+                HomeTile(kind: .calendar, row: 0, span: 5),
+                HomeTile(kind: .quickActions, row: 1, span: 2),
+                HomeTile(kind: .battery, row: 1, span: 2)
+            ]
+        case .mediaPlaying:
+            return [
+                HomeTile(kind: .nowPlaying, row: 0, span: 8),
+                HomeTile(kind: .calendar, row: 0, span: 3),
+                HomeTile(kind: .mediaScrubber, row: 1, span: 3),
+                HomeTile(kind: .battery, row: 1, span: 2)
+            ]
+        case .focusActive:
+            return [
+                HomeTile(kind: .timer, row: 0, span: 6),
+                HomeTile(kind: .agents, row: 0, span: 5),
+                HomeTile(kind: .focusStreak, row: 1, span: 2),
+                HomeTile(kind: .systemStats, row: 1, span: 2)
+            ]
+        case .charging:
+            return [
+                HomeTile(kind: .nowPlaying, row: 0, span: 6),
+                HomeTile(kind: .calendar, row: 0, span: 5),
+                HomeTile(kind: .battery, row: 1, span: 3),
+                HomeTile(kind: .devices, row: 1, span: 2)
+            ]
+        }
     }
 
     static func tiles(in layout: [HomeTile], row: Int) -> [HomeTile] {

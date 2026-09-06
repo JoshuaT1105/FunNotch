@@ -422,18 +422,39 @@ final class Settings: ObservableObject {
         set { write("idleRightWidgets", newValue.map(\.rawValue)) }
     }
 
-    /// The home tab's grid of tiles.
-    var homeTiles: [HomeTile] {
-        get {
+    /// The layout for a given situation. Only `.standard` is guaranteed; the
+    /// rest are nil until the user gives them one, and fall back to it.
+    func homeTiles(for layoutCase: LayoutCase) -> [HomeTile]? {
+        if layoutCase == .standard {
             guard let raw = store.stringArray(forKey: "homeTiles") else { return HomeLayout.default }
             let tiles = raw.compactMap(HomeTile.decode)
             return tiles.isEmpty ? HomeLayout.default : tiles
         }
-        set { write("homeTiles", newValue.map(\.encoded)) }
+        guard let raw = store.stringArray(forKey: "homeTiles.\(layoutCase.rawValue)") else { return nil }
+        let tiles = raw.compactMap(HomeTile.decode)
+        return tiles.isEmpty ? nil : tiles
+    }
+
+    func setHomeTiles(_ tiles: [HomeTile], for layoutCase: LayoutCase) {
+        let key = layoutCase == .standard ? "homeTiles" : "homeTiles.\(layoutCase.rawValue)"
+        write(key, tiles.map(\.encoded))
+    }
+
+    /// Drops a case's own layout so it inherits the default again.
+    func clearHomeTiles(for layoutCase: LayoutCase) {
+        guard layoutCase != .standard else { return }
+        store.removeObject(forKey: "homeTiles.\(layoutCase.rawValue)")
+        NotificationCenter.default.post(name: .settingsChanged, object: "homeTiles")
+    }
+
+    var homeTiles: [HomeTile] {
+        get { homeTiles(for: .standard) ?? HomeLayout.default }
+        set { setHomeTiles(newValue, for: .standard) }
     }
 
     func resetHomeLayout() {
         homeTiles = HomeLayout.default
+        for c in LayoutCase.allCases where c != .standard { clearHomeTiles(for: c) }
     }
 
     // MARK: Saved layouts

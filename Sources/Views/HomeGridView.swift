@@ -16,13 +16,9 @@ struct HomeGridView: View {
     @ObservedObject private var calendar = CalendarManager.shared
 
     var body: some View {
-        // Conditions are evaluated here rather than inside each tile so a tile
-        // that is not shown is never built, and the row divides its width
-        // between what is actually visible.
-        let tiles = settings.homeTiles.filter {
-            TileConditionEvaluator.isSatisfied($0.condition,
-                                               notchIsOpen: viewModel.notchState == .open)
-        }
+        // Which whole layout applies right now.
+        let active = LayoutCaseResolver.active(settings: settings)
+        let tiles = settings.homeTiles(for: active) ?? settings.homeTiles
         let top = HomeLayout.tiles(in: tiles, row: 0)
         let bottom = HomeLayout.tiles(in: tiles, row: 1)
 
