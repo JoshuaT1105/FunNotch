@@ -86,6 +86,11 @@ enum PreviewRenderer {
 
         scenes.append(("open-shelf", { viewModel in
             viewModel.previewOpen()
+            ShelfManager.shared.injectPreviewItems([
+                "Q3-notes.pdf", "mockup-v4.png", "budget.xlsx",
+                "Screenshot 2026-09-20 at 09.41.02.png", "contract-draft.pdf",
+                "logo-export.svg",
+            ])
             viewModel.currentTab = .shelf
         }))
 

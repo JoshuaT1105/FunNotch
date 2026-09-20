@@ -158,6 +158,27 @@ final class ShelfManager: NSObject, ObservableObject {
 
     // MARK: - Persistence
 
+    /// Replaces the shelf with fixed, invented items for snapshots.
+    ///
+    /// Every other preview scene is synthesised — music, the HUD, focus, the
+    /// timer, the clipboard, screenshots, Bluetooth. The shelf was the one that
+    /// rendered live state, so `--render-preview` on a machine that had been
+    /// using the app captured that machine's real files, filenames and
+    /// thumbnails. Screenshots go in a public repository, so it must not.
+    func injectPreviewItems(_ names: [String]) {
+        items = names.enumerated().map { index, name in
+            ShelfItem(
+                id: UUID(),
+                url: URL(fileURLWithPath: "/private/preview").appendingPathComponent(name),
+                name: name,
+                size: Int64(18_000 + index * 4_400),
+                addedAt: Date(timeIntervalSince1970: 1_780_000_000 - Double(index) * 900),
+                isTemporary: false,
+                thumbnail: nil
+            )
+        }
+    }
+
     private func restore() {
         guard let bookmarks = UserDefaults.standard.array(forKey: bookmarksKey) as? [Data] else { return }
         var restored: [ShelfItem] = []
