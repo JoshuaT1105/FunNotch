@@ -3,6 +3,15 @@
     <channel>
         <title>FunNotch</title>
         <item>
+            <title>1.2</title>
+            <pubDate>Sun, 20 Sep 2026 10:25:17 -0500</pubDate>
+            <link>https://funnotch.xyz</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.2/FunNotch-1.2.dmg" length="4591707" type="application/octet-stream" sparkle:edSignature="Rbx1kRuHVhZ1vatquEtc7nsVFTTH8r7aicgh5M+XaLdYbfmaebDzx9T5X8vORFKPqT7BOlr79dbrWORnB08ZBA=="/>
+        </item>
+        <item>
             <title>1.1</title>
             <pubDate>Sun, 30 Aug 2026 21:29:59 -0500</pubDate>
             <link>https://funnotch.xyz</link>
