@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="screenshots/open-shelf.png" alt="The FunNotch panel open in the notch, holding twenty-one dropped files with Share, AirDrop, Copy and Clear actions" width="860">
+<img src="screenshots/open-focus.png" alt="The FunNotch panel open in the notch, showing a focus session counting down beside the list of websites it is blocking" width="860">
 
 # FunNotch
 
@@ -59,7 +59,7 @@ Free and open source. No account, no subscription, no telemetry.
 <table>
 <tr>
 <td width="50%"><img src="screenshots/open-clipboard.png" alt="Searchable clipboard history, each entry labelled with the app it came from"><br><sub><b>Clipboard</b> — searchable, pinnable, and labelled with where each entry came from.</sub></td>
-<td width="50%"><img src="screenshots/open-focus.png" alt="A focus session counting down with a list of blocked websites"><br><sub><b>Focus</b> — a session counting down, with the sites it is holding shut.</sub></td>
+<td width="50%"><img src="screenshots/open-shelf.png" alt="The empty shelf inviting a file to be dropped onto the notch"><br><sub><b>Shelf</b> — drop a file on the notch and it is held until you drag it out.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="screenshots/open-timer.png" alt="The timer tab with quick-start durations"><br><sub><b>Timer</b> — countdowns and a stopwatch with laps.</sub></td>
