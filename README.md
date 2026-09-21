@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="screenshots/open-home.png" alt="The FunNotch panel open in the MacBook notch on its default home screen, showing 70 degrees and Clear for Cupertino over an animated pixel-art sun, drifting clouds and hills" width="860">
+<img src="screenshots/tour/media.webp" alt="The FunNotch panel open in the MacBook notch on its default home screen: album artwork and transport controls for Carefree by Kevin MacLeod, the week at a glance with three upcoming events, and a row of quick actions, recent files and an app shortcut" width="860">
 
 # FunNotch
 
@@ -58,10 +58,15 @@ Free and open source. No account, no subscription, no telemetry.
 
 <table>
 <tr>
-<td width="33%"><img src="screenshots/open-shelf.png" alt="The FunNotch shelf holding six dropped files, each on its own tile"><br><sub><b>Shelf</b> — drop a file on the notch and it is held until you drag it out.</sub></td>
-<td width="33%"><img src="screenshots/open-clipboard.png" alt="Searchable clipboard history in the notch, each entry labelled with the app it was copied from"><br><sub><b>Clipboard</b> — searchable, pinnable, labelled with where each entry came from.</sub></td>
-<td width="33%"><img src="screenshots/open-focus.png" alt="A focus session counting down in the notch beside the list of websites and apps it is blocking"><br><sub><b>Focus</b> — sessions that actually block apps and sites.</sub></td>
+<td width="33%"><img src="screenshots/tour/shelf.webp" alt="The FunNotch shelf holding four dropped screenshots as thumbnails, with Share, AirDrop, Copy and Clear along the top"><br><sub><b>Shelf</b> — drop a file on the notch and it is held until you drag it out.</sub></td>
+<td width="33%"><img src="screenshots/tour/clipboard.webp" alt="Searchable clipboard history in the notch showing five entries, each labelled with the app it was copied from: Safari, Notes, Terminal and Finder"><br><sub><b>Clipboard</b> — searchable, pinnable, labelled with where each entry came from.</sub></td>
+<td width="33%"><img src="screenshots/tour/focus.webp" alt="The FunNotch focus tab offering 15, 25, 45 and 60 minute sessions beside the list of sites it blocks, including youtube.com, x.com and instagram.com"><br><sub><b>Focus</b> — sessions that actually block apps and sites.</sub></td>
 </tr>
+</table>
+
+<sub>Also in the box</sub>
+
+<table>
 <tr>
 <td width="33%"><img src="screenshots/open-timer.png" alt="The FunNotch timer tab showing quick-start durations and a running countdown dial"><br><sub><b>Timer</b> — countdowns and a stopwatch with laps.</sub></td>
 <td width="33%"><img src="screenshots/open-weather-rain.png" alt="The FunNotch home screen showing 52 degrees and Rain for London, with pixel-art raindrops falling onto a hill silhouette"><br><sub><b>Weather</b> — the pixel scene follows the forecast.</sub></td>
