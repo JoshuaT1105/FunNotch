@@ -45,6 +45,19 @@ final class WeatherManager: NSObject, ObservableObject {
         authorization = locationManager.authorizationStatus
     }
 
+    /// Preview/screenshot support: shows a fixed forecast without needing
+    /// location permission, which the render process never has. Mirrors the
+    /// `injectPreview*` hooks on the other managers.
+    func injectPreviewConditions(temperatureCelsius: Double, weatherCode: Int, isDay: Bool, placeName: String?) {
+        conditions = Conditions(
+            temperatureCelsius: temperatureCelsius,
+            weatherCode: weatherCode,
+            isDay: isDay,
+            placeName: placeName
+        )
+        lastError = nil
+    }
+
     func addSubscriber() {
         subscribers += 1
         if subscribers == 1 { start() }

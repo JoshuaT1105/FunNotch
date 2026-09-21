@@ -166,6 +166,15 @@ final class MusicManager: ObservableObject {
         updateColors(from: info.artwork)
     }
 
+    /// Clears the injected track so a snapshot can show the idle home screen,
+    /// which is where the weather lives.
+    func clearPreviewTrack() {
+        track = TrackInfo()
+        displayedElapsed = 0
+        artwork = nil
+        updateColors(from: nil)
+    }
+
     // MARK: - Incoming updates
 
     private func handle(_ info: TrackInfo) {

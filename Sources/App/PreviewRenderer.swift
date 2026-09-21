@@ -42,6 +42,13 @@ enum PreviewRenderer {
             settings.closedMediaDisplay = saved.mediaDisplay
         }
 
+        // The render process has no location permission, so without this every
+        // home-screen scene shows "Weather needs location access" instead of
+        // the screen a real user sees. In-memory only; nothing touches disk.
+        WeatherManager.shared.injectPreviewConditions(
+            temperatureCelsius: 21, weatherCode: 0, isDay: true, placeName: "Cupertino"
+        )
+
         let screen = NSScreen.main
         var scenes: [(name: String, configure: (NotchViewModel) -> Void)] = []
 
@@ -231,6 +238,22 @@ enum PreviewRenderer {
             viewModel.setPreviewFocusActivity(false)
             viewModel.previewOpen()
             viewModel.currentTab = .focus
+        }))
+
+        // The home screen leads with the weather whenever media is idle, which
+        // is what the site shows too — but the render process never has
+        // location permission, so the forecast is injected. Nothing here
+        // touches disk: `conditions` is in-memory only.
+        // open-home already covers the default clear-day state. This one is
+        // here to show the pixel scene changes with the forecast.
+        scenes.append(("open-weather-rain", { viewModel in
+            MusicManager.shared.clearPreviewTrack()
+            viewModel.refreshPreviewMusicActivity()
+            WeatherManager.shared.injectPreviewConditions(
+                temperatureCelsius: 11, weatherCode: 63, isDay: true, placeName: "London"
+            )
+            viewModel.previewOpen()
+            viewModel.currentTab = .home
         }))
 
         // Scenes are rendered one at a time: several of them configure shared

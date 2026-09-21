@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="screenshots/open-focus.png" alt="The FunNotch panel open in the notch, showing a focus session counting down beside the list of websites it is blocking" width="860">
+<img src="screenshots/open-home.png" alt="The FunNotch panel open in the MacBook notch on its default home screen, showing 70 degrees and Clear for Cupertino over an animated pixel-art sun, drifting clouds and hills" width="860">
 
 # FunNotch
 
@@ -58,12 +58,19 @@ Free and open source. No account, no subscription, no telemetry.
 
 <table>
 <tr>
-<td width="50%"><img src="screenshots/open-clipboard.png" alt="Searchable clipboard history, each entry labelled with the app it came from"><br><sub><b>Clipboard</b> — searchable, pinnable, and labelled with where each entry came from.</sub></td>
-<td width="50%"><img src="screenshots/open-shelf.png" alt="The empty shelf inviting a file to be dropped onto the notch"><br><sub><b>Shelf</b> — drop a file on the notch and it is held until you drag it out.</sub></td>
+<td width="33%"><img src="screenshots/open-shelf.png" alt="The FunNotch shelf holding six dropped files, each on its own tile"><br><sub><b>Shelf</b> — drop a file on the notch and it is held until you drag it out.</sub></td>
+<td width="33%"><img src="screenshots/open-clipboard.png" alt="Searchable clipboard history in the notch, each entry labelled with the app it was copied from"><br><sub><b>Clipboard</b> — searchable, pinnable, labelled with where each entry came from.</sub></td>
+<td width="33%"><img src="screenshots/open-focus.png" alt="A focus session counting down in the notch beside the list of websites and apps it is blocking"><br><sub><b>Focus</b> — sessions that actually block apps and sites.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="screenshots/open-timer.png" alt="The timer tab with quick-start durations"><br><sub><b>Timer</b> — countdowns and a stopwatch with laps.</sub></td>
-<td width="50%"><img src="screenshots/open-game.png" alt="Notch Breakout running inside the panel"><br><sub><b>And a game</b>, because the space was there.</sub></td>
+<td width="33%"><img src="screenshots/open-timer.png" alt="The FunNotch timer tab showing quick-start durations and a running countdown dial"><br><sub><b>Timer</b> — countdowns and a stopwatch with laps.</sub></td>
+<td width="33%"><img src="screenshots/open-weather-rain.png" alt="The FunNotch home screen showing 52 degrees and Rain for London, with pixel-art raindrops falling onto a hill silhouette"><br><sub><b>Weather</b> — the pixel scene follows the forecast.</sub></td>
+<td width="33%"><img src="screenshots/island-open.png" alt="FunNotch running as a rounded floating island on a display that has no physical notch"><br><sub><b>No notch?</b> — it becomes a floating island instead.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="screenshots/closed-widgets-many.png" alt="The collapsed notch wearing widgets either side of the camera: the time and the temperature on the left, CPU, memory and battery readouts on the right"><br><sub><b>Widgets</b> — thirteen, any number either side of the camera.</sub></td>
+<td width="33%"><img src="screenshots/open-game.png" alt="Notch Breakout running inside the FunNotch panel, with coloured bricks, a paddle and a score"><br><sub><b>And a game</b>, because the space was there.</sub></td>
+<td width="33%"><img src="screenshots/closed-peek-music.png" alt="The collapsed notch briefly expanding to announce a track change, showing artwork and the title"><br><sub><b>Sneak peek</b> — track changes announce themselves, then get out of the way.</sub></td>
 </tr>
 </table>
 
