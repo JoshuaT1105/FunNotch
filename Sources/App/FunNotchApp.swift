@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UpdateManager.shared.start()
         LoginItemManager.repairRegistration()
         BluetoothMonitor.shared.start()
+        AgentSessionsManager.shared.start()
 
         NotchWindowManager.shared.start()
         // After the windows: the HUD broadcasts to them.

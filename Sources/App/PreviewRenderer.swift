@@ -27,6 +27,8 @@ enum PreviewRenderer {
 
     static func run(into directory: URL) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Entrances are drawn finished: the capture cannot wait for them.
+        Motion.snapshotMode = true
 
         let settings = Settings.shared
         let saved = (
@@ -256,6 +258,62 @@ enum PreviewRenderer {
             viewModel.currentTab = .home
         }))
 
+        // MARK: Live activities
+
+        scenes.append(("closed-hud-muted", { viewModel in
+            MusicManager.shared.clearPreviewTrack()
+            viewModel.setPreviewMusicActivity(false)
+            HUDManager.shared.injectPreview(.volume, value: 0.4, muted: true)
+            viewModel.expandingView = SneakPeek(
+                show: true, type: .hud, value: 0, icon: HUDManager.Kind.volume.mutedSymbol
+            )
+        }))
+
+        scenes.append(("closed-hud-backlight", { viewModel in
+            viewModel.expandingView = SneakPeek(
+                show: true, type: .hud, value: 0.7, icon: HUDManager.Kind.keyboardBacklight.symbol
+            )
+        }))
+
+        scenes.append(("closed-agent-started", { viewModel in
+            AgentSessionsManager.shared.injectPreview(.started, broadcast: false)
+            viewModel.expandingView = SneakPeek(show: true, type: .agent)
+        }))
+
+        scenes.append(("closed-agent-finished", { viewModel in
+            AgentSessionsManager.shared.injectPreview(.finished(194), broadcast: false)
+            viewModel.expandingView = SneakPeek(show: true, type: .agent)
+        }))
+
+        scenes.append(("closed-agent-waiting", { viewModel in
+            AgentSessionsManager.shared.injectPreview(.needsInput("permission prompt"), broadcast: false)
+            viewModel.expandingView = SneakPeek(show: true, type: .agent)
+        }))
+
+        // Beside the clock and battery, a working agent is a small light.
+        scenes.append(("closed-agent-light", { viewModel in
+            let settings = Settings.shared
+            settings.idleWidgetsEnabled = true
+            settings.idleLeftWidgets = [.clock]
+            settings.idleRightWidgets = [.battery]
+            AgentSessionsManager.shared.injectPreviewSessions(Array(Self.sampleSessions().prefix(1)) + [Self.sampleSessions()[3]])
+            viewModel.setPreviewAgentActivity(AgentActivity(active: 2, waiting: false))
+        }))
+
+        // With nothing else there, it takes both wings.
+        scenes.append(("closed-agent-wings", { viewModel in
+            Settings.shared.idleWidgetsEnabled = false
+            AgentSessionsManager.shared.injectPreviewSessions([Self.sampleSessions()[0]])
+            viewModel.setPreviewAgentActivity(AgentActivity(active: 1, waiting: false))
+        }))
+
+        scenes.append(("closed-focus-banner", { viewModel in
+            AgentSessionsManager.shared.injectPreviewSessions([])
+            viewModel.setPreviewAgentActivity(AgentActivity())
+            FocusManager.shared.injectPreviewSession(minutes: 25, elapsedFraction: 0.02)
+            viewModel.expandingView = SneakPeek(show: true, type: .focus, value: 0, icon: "cup.and.saucer.fill")
+        }))
+
         // Scenes are rendered one at a time: several of them configure shared
         // singletons, so running them concurrently would let the last one win.
         renderSequentially(scenes, index: 0, screen: screen, directory: directory)
@@ -269,7 +327,10 @@ enum PreviewRenderer {
     ) {
         guard index < scenes.count else {
             restoreSettings?()
-            NSApp.terminate(nil)
+            FocusManager.shared.clearPreviewSession()
+            renderExtras(into: directory) {
+                NSApp.terminate(nil)
+            }
             return
         }
 
@@ -284,6 +345,96 @@ enum PreviewRenderer {
         render(root: root, to: directory.appendingPathComponent("\(scene.name).png")) {
             renderSequentially(scenes, index: index + 1, screen: screen, directory: directory)
         }
+    }
+
+    // MARK: Tiles and windows
+
+    /// The Agents tile on its own, and every page of the two windows.
+    private static func renderExtras(into directory: URL, completion: @escaping () -> Void) {
+        var jobs: [(name: String, size: CGSize, dark: Bool, make: () -> AnyView)] = []
+
+        jobs.append(("tile-agents", CGSize(width: 300, height: 128), true, {
+            AgentSessionsManager.shared.injectPreviewSessions(Self.sampleSessions())
+            return AnyView(
+                AgentSessionsTile()
+                    .frame(width: 270, height: 100)
+                    .padding(14)
+                    .background(Color.black)
+            )
+        }))
+        jobs.append(("tile-agents-compact", CGSize(width: 270, height: 74), true, {
+            AnyView(
+                HomePanelChrome { AgentSessionsTile(compact: true) }
+                    .frame(width: 240, height: 46)
+                    .padding(14)
+                    .background(Color.black)
+            )
+        }))
+        jobs.append(("tile-agents-empty", CGSize(width: 300, height: 128), true, {
+            AgentSessionsManager.shared.injectPreviewSessions([])
+            return AnyView(
+                AgentSessionsTile()
+                    .frame(width: 270, height: 100)
+                    .padding(14)
+                    .background(Color.black)
+            )
+        }))
+
+        for tab in SettingsTab.allCases {
+            jobs.append(("settings-\(tab.rawValue)", CGSize(width: 820, height: 640), false, {
+                if tab == .agents { AgentSessionsManager.shared.injectPreviewSessions(Self.sampleSessions()) }
+                SettingsNavigation.shared.tab = tab
+                return AnyView(SettingsView().environmentObject(Settings.shared))
+            }))
+        }
+        for tab in CustomizeTab.allCases {
+            jobs.append(("customize-\(tab.rawValue)", CGSize(width: 1010, height: 720), true, {
+                CustomizeNavigation.shared.tab = tab
+                return AnyView(CustomizeView(onDone: {}))
+            }))
+        }
+
+        func next(_ index: Int) {
+            guard index < jobs.count else {
+                completion()
+                return
+            }
+            let job = jobs[index]
+            render(
+                root: job.make(),
+                size: job.size,
+                appearance: NSAppearance(named: job.dark ? .darkAqua : .aqua),
+                to: directory.appendingPathComponent("\(job.name).png")
+            ) {
+                next(index + 1)
+            }
+        }
+        next(0)
+    }
+
+    /// Made-up sessions: one working, one waiting on a permission prompt, one
+    /// that finished, and a second working one.
+    static func sampleSessions() -> [AgentSessionsManager.Session] {
+        let now = Date()
+        func make(
+            _ id: String, _ name: String, _ project: String,
+            _ status: AgentSessionsManager.Status, since: TimeInterval, turn: TimeInterval?,
+            last: TimeInterval? = nil, agent: AgentSessionsManager.Agent = .claude
+        ) -> AgentSessionsManager.Session {
+            AgentSessionsManager.Session(
+                id: id, agent: agent, name: name, project: project, status: status,
+                statusSince: now.addingTimeInterval(-since),
+                turnStartedAt: turn.map { now.addingTimeInterval(-$0) },
+                lastTurnDuration: last, startedAt: now.addingTimeInterval(-3600),
+                pid: nil, host: .claudeApp
+            )
+        }
+        return [
+            make("a", "Notch animations", "FunNotch", .working, since: 134, turn: 134),
+            make("b", "Release notes", "FunNotch", .waiting("permission prompt"), since: 12, turn: 75),
+            make("c", "Fix the shelf drop", "FunNotch", .idle, since: 240, turn: 700, last: 460),
+            make("d", "Website copy", "Website", .working, since: 42, turn: 42),
+        ]
     }
 
     private static func sampleTrack() -> TrackInfo {
@@ -316,17 +467,26 @@ enum PreviewRenderer {
         return image
     }
 
-    private static func render(root: some View, to url: URL, completion: @escaping () -> Void) {
+    private static func render(
+        root: some View,
+        size: CGSize = windowSize,
+        appearance: NSAppearance? = nil,
+        to url: URL,
+        completion: @escaping () -> Void
+    ) {
         let hosting = NSHostingView(rootView: AnyView(root))
-        hosting.frame = CGRect(origin: .zero, size: windowSize)
+        // As the real windows: SwiftUI sets the minimum, the window the size.
+        hosting.sizingOptions = [.minSize]
+        hosting.frame = CGRect(origin: .zero, size: size)
 
         // A real (offscreen) window makes SwiftUI lay out and draw for real.
         let window = NSWindow(
-            contentRect: CGRect(origin: CGPoint(x: -8000, y: -8000), size: windowSize),
+            contentRect: CGRect(origin: CGPoint(x: -8000, y: -8000), size: size),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
+        window.appearance = appearance
         window.contentView = hosting
         window.isOpaque = false
         window.backgroundColor = NSColor(white: 0.16, alpha: 1)

@@ -37,7 +37,7 @@ struct ClipboardView: View {
             Text("Clipboard history is off")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.65))
-            Text("Turn it on in Settings → Clipboard")
+            Text("Turn it on in Settings → Shelf & Clipboard")
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.35))
         }

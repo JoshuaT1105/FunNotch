@@ -23,6 +23,9 @@ final class DownloadWatcher: ObservableObject {
     private var startedAt = Date()
     private var cancellables = Set<AnyCancellable>()
     private var rescanWork: DispatchWorkItem?
+    /// Bumped on every restart, so a slow start that finishes after a newer
+    /// one is thrown away rather than attached.
+    private var generation = 0
 
     /// Extensions that mean "still downloading".
     private static let inProgressExtensions: Set<String> = [
@@ -44,17 +47,38 @@ final class DownloadWatcher: ObservableObject {
 
     func restart() {
         stop()
+        generation += 1
         guard Settings.shared.catchDownloads else { return }
 
         let directory = FileManager.default.standardDirectory(.downloadsDirectory, fallback: "Downloads")
-        seen = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
         startedAt = Date()
+        let generation = self.generation
 
-        descriptor = open(directory.path, O_EVTONLY)
+        // Off the main thread, for the same reason as the screenshot watcher:
+        // Downloads is protected, and the first read can wait indefinitely on
+        // a permission prompt.
+        DispatchQueue.global(qos: .utility).async {
+            let names = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            let descriptor = open(directory.path, O_EVTONLY)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard generation == self.generation else {
+                        if descriptor >= 0 { close(descriptor) }
+                        return
+                    }
+                    self.attach(descriptor: descriptor, to: directory, seen: names)
+                }
+            }
+        }
+    }
+
+    private func attach(descriptor: CInt, to directory: URL, seen names: Set<String>) {
+        seen = names
         guard descriptor >= 0 else {
             DiagnosticLog.write("downloads", "could not watch \(directory.path)")
             return
         }
+        self.descriptor = descriptor
 
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
@@ -64,10 +88,14 @@ final class DownloadWatcher: ObservableObject {
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.scheduleScan(in: directory) }
         }
+        // Closes the descriptor this source was made with. Reading
+        // `self.descriptor` here instead would close whichever one is current
+        // by the time the handler runs — after a restart, the new one.
         source.setCancelHandler { [weak self] in
-            guard let self, self.descriptor >= 0 else { return }
-            close(self.descriptor)
-            self.descriptor = -1
+            close(descriptor)
+            MainActor.assumeIsolated {
+                if self?.descriptor == descriptor { self?.descriptor = -1 }
+            }
         }
         source.resume()
         self.source = source

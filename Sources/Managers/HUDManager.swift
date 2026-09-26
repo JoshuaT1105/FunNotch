@@ -70,6 +70,10 @@ final class HUDManager: ObservableObject {
             return
         }
         guard AXIsProcessTrusted() else {
+            // Worth a line in the log: every rebuild with an ad-hoc signature
+            // loses the grant, and without this the only symptom is the
+            // system's own HUD quietly coming back.
+            if lastError == nil { DiagnosticLog.write("hud", "waiting for Accessibility access") }
             isIntercepting = false
             lastError = "Accessibility access not granted"
             return

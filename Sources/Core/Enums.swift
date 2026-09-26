@@ -23,6 +23,8 @@ enum SneakContentType {
     case bluetooth
     /// Volume, brightness or keyboard backlight, replacing the system panel.
     case hud
+    /// A Claude Code or Codex session starting, finishing or waiting for you.
+    case agent
     case none
 }
 

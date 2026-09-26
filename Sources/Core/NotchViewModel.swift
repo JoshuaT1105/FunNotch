@@ -17,6 +17,26 @@ struct SneakPeek: Equatable {
     var type: SneakContentType = .none
     var value: CGFloat = 0
     var icon: String = ""
+    /// Identity of this particular announcement. A new one replays the
+    /// entrance; repeated volume presses keep the same one, so the HUD reacts
+    /// to each press instead of starting over.
+    var token = UUID()
+}
+
+/// What the agents are up to, as far as the collapsed notch cares.
+struct AgentActivity: Equatable {
+    var active = 0
+    var waiting = false
+}
+
+/// How a working agent is shown beside the cutout.
+enum AgentPresentation {
+    case none
+    /// A small light at the inner edge of the right wing, beside whatever
+    /// else is there.
+    case pip
+    /// Nothing else is beside the cutout, so the agent gets both wings.
+    case wings
 }
 
 @MainActor
@@ -64,6 +84,9 @@ final class NotchViewModel: ObservableObject {
     /// What the on-screen widgets reported they need, per side.
     @Published private(set) var measuredWidgetWidths: [NotchSide: CGFloat] = [:]
 
+    /// Mirrored from the agent sessions manager so geometry can react to it.
+    @Published private(set) var agentActivity = AgentActivity()
+
     init(screen: NSScreen?) {
         screenIdentifier = screen?.displayIdentifier ?? ""
         closedNotchSize = measureClosedNotch(for: screen)
@@ -80,6 +103,19 @@ final class NotchViewModel: ObservableObject {
                 let shouldShow = !track.isEmpty
                 guard shouldShow != self.showsMusicActivity else { return }
                 withAnimation(.notchContent) { self.showsMusicActivity = shouldShow }
+            }
+            .store(in: &cancellables)
+
+        AgentSessionsManager.shared.$sessions
+            .receive(on: RunLoop.main)
+            .sink { [weak self] sessions in
+                guard let self else { return }
+                let next = AgentActivity(
+                    active: sessions.filter(\.status.isActive).count,
+                    waiting: sessions.contains(where: \.status.isWaiting)
+                )
+                guard next != self.agentActivity else { return }
+                withAnimation(.notchContent) { self.agentActivity = next }
             }
             .store(in: &cancellables)
 
@@ -183,6 +219,11 @@ final class NotchViewModel: ObservableObject {
         focusIsActive = active
     }
 
+    /// Forces the agent live activity, for snapshots.
+    func setPreviewAgentActivity(_ activity: AgentActivity) {
+        agentActivity = activity
+    }
+
     private func cancelPendingClose() {
         closeWorkItem?.cancel()
         closeWorkItem = nil
@@ -211,8 +252,12 @@ final class NotchViewModel: ObservableObject {
     /// Shows the wider HUD strip used for volume / brightness / backlight.
     func showExpandingView(type: SneakContentType, value: CGFloat, icon: String, duration: Double = 2.0) {
         expandingViewWorkItem?.cancel()
+        var next = SneakPeek(show: true, type: type, value: value, icon: icon)
+        if type == .hud, expandingView.show, expandingView.type == .hud {
+            next.token = expandingView.token
+        }
         withAnimation(.smooth) {
-            expandingView = SneakPeek(show: true, type: type, value: value, icon: icon)
+            expandingView = next
         }
         let work = DispatchWorkItem { [weak self] in
             withAnimation(.smooth) { self?.expandingView.show = false }
@@ -227,6 +272,11 @@ final class NotchViewModel: ObservableObject {
     static let musicActivityInset: CGFloat = MusicPlayerImageSizes.size.closed.width + 12
     /// Width the countdown needs beside the cutout.
     static let focusActivityInset: CGFloat = 46
+    /// The agent light beside other activities, and its width with a count.
+    static let agentPipWidth: CGFloat = 32
+    static let agentPipWidthWithCount: CGFloat = 43
+    /// Each wing when a working agent has the cutout to itself.
+    static let agentWingInset: CGFloat = 46
 
     /// True when the announcement strip is showing below the cutout.
     var isShowingStandardHUD: Bool {
@@ -278,6 +328,23 @@ final class NotchViewModel: ObservableObject {
         return settings.closedMediaDisplay.showsWidgets
     }
 
+    /// True when a Claude Code or Codex session is working or waiting.
+    var showsAgentActivity: Bool {
+        settings.agentActivityEnabled && agentActivity.active > 0
+    }
+
+    /// Where the agent light goes, given what else is beside the cutout.
+    var agentPresentation: AgentPresentation {
+        guard notchState == .closed, showsAgentActivity else { return .none }
+        guard !isShowingDropZone, !isShowingStandardHUD, !isShowingStandardMusicPeek else { return .none }
+        let sidesTaken = isShowingWidgets || showsClosedMediaActivity || showsFocusActivity
+        return sidesTaken ? .pip : .wings
+    }
+
+    var agentPipWidth: CGFloat {
+        agentActivity.active > 1 ? Self.agentPipWidthWithCount : Self.agentPipWidth
+    }
+
     /// Space taken beside the cutout by the live activities, left and right.
     var closedActivityInsets: (leading: CGFloat, trailing: CGFloat) {
         if isShowingDropZone { return (110, 110) }
@@ -311,6 +378,16 @@ final class NotchViewModel: ObservableObject {
                 : (measuredWidgetWidths[.trailing] ?? Self.estimatedWidth(of: widgets.trailing))
         }
 
+        switch agentPresentation {
+        case .none:
+            break
+        case .pip:
+            trailing += agentPipWidth
+        case .wings:
+            leading = max(leading, Self.agentWingInset)
+            trailing = max(trailing, Self.agentWingInset)
+        }
+
         return (leading, trailing)
     }
 
@@ -338,12 +415,14 @@ final class NotchViewModel: ObservableObject {
             if isShowingDropZone {
                 size.height += 26
             } else if isShowingStandardHUD {
-                size.width = max(size.width + 130, 300)
-                size.height += 34
+                let style = LiveActivityMetrics.style(for: expandingView.type)
+                size.width = max(size.width + style.wing * 2, style.minimumWidth)
+                size.height += style.chin
                 return size
             } else if isShowingStandardMusicPeek {
-                size.width = max(size.width + 60, 300)
-                size.height += 34
+                let style = LiveActivityMetrics.banner
+                size.width = max(size.width + style.wing * 2, style.minimumWidth)
+                size.height += style.chin
                 return size
             }
 

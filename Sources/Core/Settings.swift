@@ -859,6 +859,30 @@ final class Settings: ObservableObject {
         set { write("gameHighScore", newValue) }
     }
 
+    // MARK: - Agents
+
+    /// A small spinner beside the cutout while a Claude Code or Codex session
+    /// is working, and an orange light while one is waiting for you.
+    var agentActivityEnabled: Bool {
+        get { bool("agentActivityEnabled", true) }
+        set { write("agentActivityEnabled", newValue) }
+    }
+
+    var agentAnnounceStart: Bool {
+        get { bool("agentAnnounceStart", true) }
+        set { write("agentAnnounceStart", newValue) }
+    }
+
+    var agentAnnounceFinish: Bool {
+        get { bool("agentAnnounceFinish", true) }
+        set { write("agentAnnounceFinish", newValue) }
+    }
+
+    var agentAnnounceWaiting: Bool {
+        get { bool("agentAnnounceWaiting", true) }
+        set { write("agentAnnounceWaiting", newValue) }
+    }
+
     // MARK: - Onboarding
 
     var hasCompletedOnboarding: Bool {
@@ -899,5 +923,6 @@ final class Settings: ObservableObject {
         "notchBorderColorSource", "notchBorderWhenClosed",
         "menubarGlyph", "menubarReadout", "menubarReadoutLength",
         "hudEnabled", "hudShowsVolume", "hudShowsBrightness", "hudShowsBacklight",
+        "agentActivityEnabled", "agentAnnounceStart", "agentAnnounceFinish", "agentAnnounceWaiting",
     ]
 }

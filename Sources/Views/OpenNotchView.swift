@@ -121,10 +121,10 @@ struct NotchHeader: View {
                 // to rearrange it belongs here rather than three levels into
                 // Settings.
                 HoverButton(systemName: "square.grid.2x2", size: 13, padding: 5) {
-                    LayoutEditorWindowController.shared.show()
+                    CustomizeWindowController.shared.show(tab: .home)
                     viewModel.close()
                 }
-                .help("Customise the home screen")
+                .help("Customize the notch")
 
                 HoverButton(systemName: "gearshape", size: 13, padding: 5) {
                     SettingsWindowController.shared.show()

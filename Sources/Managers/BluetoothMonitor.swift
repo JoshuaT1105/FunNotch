@@ -56,6 +56,21 @@ final class BluetoothMonitor: ObservableObject {
     private init() {}
 
     func start() {
+        // The first call into IOBluetooth waits for the answer to macOS's
+        // Bluetooth permission prompt, which reappears on every rebuild of an
+        // ad-hoc-signed copy. Made on the main thread, that wait froze the app
+        // at launch before the notch had even been created. So the first call
+        // happens here, and polling starts once it has come back.
+        DispatchQueue.global(qos: .utility).async {
+            _ = IOBluetoothDevice.pairedDevices()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self.beginPolling() }
+            }
+        }
+    }
+
+    private func beginPolling() {
+        guard timer == nil else { return }
         refresh(announce: false)
 
         // IOBluetooth's connect notifications are per-device and awkward to

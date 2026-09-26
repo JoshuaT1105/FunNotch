@@ -123,6 +123,26 @@ struct ClosedNotchView: View {
     @ObservedObject private var music = MusicManager.shared
 
     var body: some View {
+        Group {
+            if viewModel.isShowingStandardHUD {
+                LiveActivityBanner(activity: viewModel.expandingView, geometry: bannerGeometry)
+                    .id(viewModel.expandingView.token)
+                    .transition(.opacity)
+            } else if viewModel.isShowingStandardMusicPeek {
+                MusicPeekBanner(geometry: bannerGeometry)
+                    .transition(.opacity)
+            } else {
+                resting
+                    .transition(.opacity)
+            }
+        }
+        .onPreferenceChange(WidgetWidthKey.self) { widths in
+            viewModel.updateMeasuredWidgetWidths(widths)
+        }
+    }
+
+    /// Everything that sits beside the cutout between announcements.
+    private var resting: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 leadingActivity
@@ -132,42 +152,43 @@ struct ClosedNotchView: View {
                 Color.clear
                     .frame(width: viewModel.closedNotchSize.width, height: viewModel.closedNotchSize.height)
 
-                trailingActivity
-                    .frame(width: insets.trailing, height: viewModel.closedNotchSize.height)
+                HStack(spacing: 0) {
+                    if viewModel.agentPresentation == .pip {
+                        AgentPip()
+                            .frame(width: viewModel.agentPipWidth)
+                    }
+                    trailingActivity
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(width: insets.trailing, height: viewModel.closedNotchSize.height)
             }
 
             if viewModel.isShowingDropZone {
                 DropZoneHint()
                     .frame(height: 26)
                     .transition(.opacity)
-            } else if viewModel.isShowingStandardHUD {
-                ActivityStrip(activity: viewModel.expandingView)
-                    .frame(height: 34)
-                    .transition(.opacity)
-            } else if viewModel.isShowingStandardMusicPeek {
-                StandardMusicPeek()
-                    .frame(height: 34)
-                    .transition(.opacity)
             }
         }
-        .onPreferenceChange(WidgetWidthKey.self) { widths in
-            viewModel.updateMeasuredWidgetWidths(widths)
-        }
+    }
+
+    /// The row beside the camera is the hardware's height; an island's top gap
+    /// is outside the drawn shape, so it is not part of the row.
+    private var bannerGeometry: BannerGeometry {
+        let size = viewModel.contentSize
+        return BannerGeometry(
+            width: size.width,
+            cutoutWidth: viewModel.closedNotchSize.width,
+            rowHeight: viewModel.closedNotchSize.height - viewModel.islandTopGap,
+            chin: max(size.height - viewModel.closedNotchSize.height, 0)
+        )
     }
 
     private var insets: (leading: CGFloat, trailing: CGFloat) {
-        if viewModel.isShowingDropZone {
-            return viewModel.closedActivityInsets
-        }
-        if viewModel.isShowingStandardHUD || viewModel.isShowingStandardMusicPeek {
-            let side = max((viewModel.contentSize.width - viewModel.closedNotchSize.width) / 2, 0)
-            return (side, side)
-        }
-        return viewModel.closedActivityInsets
+        viewModel.closedActivityInsets
     }
 
-    /// The strip below the notch already carries the artwork and spectrum, so
-    /// the row beside the cutout stays empty while it is on screen.
+    /// The banner carries the artwork and spectrum itself, so the row beside
+    /// the cutout stays empty while one is on screen.
     private var showsSideActivity: Bool {
         viewModel.showsClosedMediaActivity
             && !viewModel.isShowingStandardHUD
@@ -178,6 +199,9 @@ struct ClosedNotchView: View {
     private var leadingActivity: some View {
         if viewModel.isShowingDropZone {
             DropZoneGlyph(systemName: "tray.and.arrow.down.fill")
+        } else if viewModel.agentPresentation == .wings {
+            AgentWingGlyph()
+                .transition(.scale(scale: 0.4).combined(with: .opacity))
         } else if showsSideActivity, viewModel.isShowingWidgets {
             // Sharing the row: the artwork keeps its place against the cutout
             // and the widgets flank it on the outside.
@@ -201,6 +225,9 @@ struct ClosedNotchView: View {
     private var trailingActivity: some View {
         if viewModel.isShowingDropZone {
             DropZoneGlyph(systemName: "plus.circle.fill")
+        } else if viewModel.agentPresentation == .wings {
+            AgentWingClock()
+                .transition(.opacity)
         } else if viewModel.showsFocusActivity {
             ClosedFocusCountdown()
         } else if showsSideActivity, viewModel.isShowingWidgets {

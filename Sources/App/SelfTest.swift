@@ -378,6 +378,9 @@ enum SelfTest {
         widgetModel.sneakPeek = SneakPeek()
         widgetModel.dragDetectorTargeting = false
         widgetModel.setPreviewMusicActivity(false)
+        // A session working in Claude Code while this runs would otherwise
+        // claim the space these checks measure.
+        widgetModel.setPreviewAgentActivity(AgentActivity())
 
         settings.idleWidgetsEnabled = false
         let bareWidth = widgetModel.contentSize.width
@@ -576,6 +579,117 @@ enum SelfTest {
         check("and carries its value", abs(HUDManager.shared.value - 0.42) < 0.001)
         HUDManager.shared.clearPreview()
         check("and clears again", HUDManager.shared.showing == nil)
+
+        // MARK: Live activities
+        let stage = controller.viewModel
+        stage.setPreviewMusicActivity(false)
+        stage.setPreviewAgentActivity(AgentActivity())
+        stage.showExpandingView(type: .hud, value: 0.5, icon: HUDManager.Kind.volume.symbol, duration: 0.3)
+        let firstToken = stage.expandingView.token
+        let hudDrop = stage.contentSize.height - stage.closedNotchSize.height
+        check(
+            "the HUD drops only a sliver below the notch",
+            abs(hudDrop - LiveActivityMetrics.hud.chin) < 0.5 && hudDrop <= 16,
+            detail: "\(Int(hudDrop)) pt, was 34"
+        )
+        stage.showExpandingView(type: .hud, value: 0.56, icon: HUDManager.Kind.volume.symbol, duration: 0.3)
+        check("pressing again keeps the same HUD rather than restarting it", stage.expandingView.token == firstToken)
+        stage.showExpandingView(type: .battery, value: 0.8, icon: "battery.100.bolt", duration: 0.3)
+        check("a different announcement plays its own entrance", stage.expandingView.token != firstToken)
+        let bannerDrop = stage.contentSize.height - stage.closedNotchSize.height
+        check("announcements drop less than they used to", bannerDrop < 34, detail: "\(Int(bannerDrop)) pt, was 34")
+        stage.expandingView = SneakPeek()
+
+        // MARK: Agents
+        //
+        // Claude Code's registry is only ever read: whatever is running is
+        // reported, and nothing in it is touched.
+        let registry = AgentSessionsManager.readClaudeRegistry()
+        info("Claude Code sessions running", "\(registry.count)")
+        check(
+            "every registry session belongs to a live process",
+            registry.allSatisfy { ProcessInfoReader.isAlive($0.pid) }
+        )
+        check(
+            "every session has a name to show",
+            registry.allSatisfy { !$0.name.isEmpty && !$0.project.isEmpty }
+        )
+
+        let origin = Date(timeIntervalSince1970: 1_800_000_000)
+        func agentSession(_ status: AgentSessionsManager.Status, at offset: TimeInterval) -> AgentSessionsManager.Session {
+            AgentSessionsManager.Session(
+                id: "test", agent: .claude, name: "Test", project: "test", status: status,
+                statusSince: origin.addingTimeInterval(offset), turnStartedAt: nil, lastTurnDuration: nil,
+                startedAt: origin, pid: nil, host: .process
+            )
+        }
+        var opened = agentSession(.idle, at: 0)
+        check("a session that opens idle is not news", AgentSessionsManager.transition(from: nil, to: &opened).isEmpty)
+        var working = agentSession(.working, at: 10)
+        check("idle to busy is a start", AgentSessionsManager.transition(from: opened, to: &working) == [.started])
+        var asking = agentSession(.waiting("permission prompt"), at: 70)
+        check(
+            "busy to waiting asks for you",
+            AgentSessionsManager.transition(from: working, to: &asking) == [.needsInput("permission prompt")]
+        )
+        var resumed = agentSession(.working, at: 90)
+        check("answering it is not a second start", AgentSessionsManager.transition(from: asking, to: &resumed).isEmpty)
+        var finished = agentSession(.idle, at: 204)
+        let finishEvents = AgentSessionsManager.transition(from: resumed, to: &finished)
+        check(
+            "a turn is timed from its first message, pause included",
+            finishEvents == [.finished(194)],
+            detail: "\(finishEvents)"
+        )
+        check("and the time is kept on the session", finished.lastTurnDuration == 194)
+        check(
+            "durations read naturally",
+            AgentSessionsManager.duration(194) == "3m 14s"
+                && AgentSessionsManager.duration(45) == "45s"
+                && AgentSessionsManager.duration(3900) == "1h 5m"
+        )
+        check(
+            "a working clock reads naturally",
+            AgentSessionsManager.clock(134) == "2:14" && AgentSessionsManager.clock(3725) == "1:02:05"
+        )
+        check(
+            "a waiting reason becomes a sentence",
+            AgentSessionsManager.waitingText("permission prompt") == "Needs your permission"
+        )
+        check(
+            "a folder with a space in it keeps its name",
+            AgentSessionsManager.projectName(for: "/Users/someone/untitled folder") == "untitled folder"
+        )
+
+        let savedAgentSettings = (
+            enabled: settings.agentActivityEnabled,
+            idle: settings.idleWidgetsEnabled,
+            left: settings.idleLeftWidgets,
+            right: settings.idleRightWidgets
+        )
+        settings.agentActivityEnabled = true
+        settings.idleWidgetsEnabled = false
+        stage.setPreviewAgentActivity(AgentActivity(active: 1, waiting: false))
+        check(
+            "a working agent takes both wings when nothing else is there",
+            stage.agentPresentation == .wings
+                && stage.closedActivityInsets.leading == NotchViewModel.agentWingInset
+        )
+        settings.idleWidgetsEnabled = true
+        settings.idleLeftWidgets = [.clock]
+        settings.idleRightWidgets = [.battery]
+        check("beside widgets it shrinks to a small light", stage.agentPresentation == .pip)
+        let withLight = stage.closedActivityInsets.trailing
+        stage.setPreviewAgentActivity(AgentActivity())
+        check(
+            "and hands the room back when the agent stops",
+            stage.closedActivityInsets.trailing < withLight,
+            detail: "\(Int(withLight)) → \(Int(stage.closedActivityInsets.trailing))"
+        )
+        settings.agentActivityEnabled = savedAgentSettings.enabled
+        settings.idleWidgetsEnabled = savedAgentSettings.idle
+        settings.idleLeftWidgets = savedAgentSettings.left
+        settings.idleRightWidgets = savedAgentSettings.right
 
         check(
             "the menu bar can be given a readout",

@@ -24,6 +24,9 @@ final class ScreenshotWatcher: ObservableObject {
     private var startedAt = Date()
     private var cancellables = Set<AnyCancellable>()
     private var rescanWork: DispatchWorkItem?
+    /// Bumped on every restart, so a slow start that finishes after a newer
+    /// one is thrown away rather than attached.
+    private var generation = 0
 
     private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "tiff", "pdf"]
     private static let movieExtensions: Set<String> = ["mov", "mp4"]
@@ -43,20 +46,41 @@ final class ScreenshotWatcher: ObservableObject {
 
     func restart() {
         stop()
+        generation += 1
         guard Settings.shared.catchScreenshots else { return }
 
         let directory = Self.screenshotDirectory()
         watchedDirectory = directory
-
-        // Everything already there is old news.
-        seen = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
         startedAt = Date()
+        let generation = self.generation
 
-        descriptor = open(directory.path, O_EVTONLY)
+        // Off the main thread. The Desktop is a protected folder, and the
+        // first read of it after a rebuild waits — for as long as it takes —
+        // for the user to answer macOS's permission prompt. On the main thread
+        // that froze the whole app at launch, before the notch even existed.
+        DispatchQueue.global(qos: .utility).async {
+            // Everything already there is old news.
+            let names = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            let descriptor = open(directory.path, O_EVTONLY)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard generation == self.generation else {
+                        if descriptor >= 0 { close(descriptor) }
+                        return
+                    }
+                    self.attach(descriptor: descriptor, to: directory, seen: names)
+                }
+            }
+        }
+    }
+
+    private func attach(descriptor: CInt, to directory: URL, seen names: Set<String>) {
+        seen = names
         guard descriptor >= 0 else {
             DiagnosticLog.write("screenshots", "could not watch \(directory.path)")
             return
         }
+        self.descriptor = descriptor
 
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
@@ -66,10 +90,14 @@ final class ScreenshotWatcher: ObservableObject {
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.scheduleScan() }
         }
+        // Closes the descriptor this source was made with. Reading
+        // `self.descriptor` here instead would close whichever one is current
+        // by the time the handler runs — after a restart, the new one.
         source.setCancelHandler { [weak self] in
-            guard let self, self.descriptor >= 0 else { return }
-            close(self.descriptor)
-            self.descriptor = -1
+            close(descriptor)
+            MainActor.assumeIsolated {
+                if self?.descriptor == descriptor { self?.descriptor = -1 }
+            }
         }
         source.resume()
         self.source = source

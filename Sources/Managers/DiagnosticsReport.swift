@@ -292,7 +292,7 @@ final class DiagnosticsReport: ObservableObject {
                         : .missing(HUDManager.shared.lastError ?? "not intercepting")
                 }(),
                 remedy: Settings.shared.hudEnabled && !HUDManager.shared.isIntercepting
-                    ? "Privacy & Security → Accessibility, then re-enable it in Settings → General."
+                    ? "Privacy & Security → Accessibility, then re-enable it in Settings → Live Activities."
                     : nil
             ),
             Row(

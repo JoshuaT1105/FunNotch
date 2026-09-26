@@ -16,7 +16,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
 
-    /// Opens settings on a specific pane, for links from inside the notch.
+    /// Opens settings on a specific page, for links from inside the notch.
     func show(tab: SettingsTab) {
         SettingsNavigation.shared.tab = tab
         show()
@@ -33,11 +33,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(
             rootView: SettingsView().environmentObject(Settings.shared)
         )
+        hosting.sizingOptions = [.minSize]
 
         let window = NSWindow(contentViewController: hosting)
         window.title = "Fun Notch Settings"
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 660, height: 520))
+        // The sidebar runs up under the traffic lights, System Settings style.
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.setContentSize(NSSize(width: 820, height: 620))
+        window.contentMinSize = NSSize(width: 780, height: 560)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
@@ -50,9 +55,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Drop back to accessory so the Dock icon disappears again.
+        let closing = notification.object as? NSWindow
         DispatchQueue.main.async {
-            NSApp.setActivationPolicy(.accessory)
+            Self.refreshActivationPolicy(excluding: closing)
         }
+    }
+
+    /// Keeps the Dock icon while any of the app's own windows is open, and
+    /// drops it once the last one closes. The notch panels do not count.
+    static func refreshActivationPolicy(excluding closing: NSWindow?) {
+        let hasWindow = NSApp.windows.contains { window in
+            window !== closing && window.isVisible && window.styleMask.contains(.titled)
+        }
+        NSApp.setActivationPolicy(hasWindow ? .regular : .accessory)
     }
 }

@@ -76,7 +76,13 @@ struct HomeTileView: View {
         case .mirror:
             MirrorPane()
         case .agents:
-            AgentSessionsTile()
+            if tile.row == 1 {
+                HomePanelChrome {
+                    AgentSessionsTile(compact: true)
+                }
+            } else {
+                AgentSessionsTile()
+            }
         case .notes:
             NotesView()
         case .timer:
