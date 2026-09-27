@@ -22,6 +22,12 @@ struct HomeLayoutEditor: View {
     @State private var slotNames: [String] = []
     @State private var slotName = ""
     @State private var showingSaveSlot = false
+    /// The placed widget being dragged, if the drag in flight is one. Drops
+    /// only say what they carry once they land, so this is how the gallery
+    /// knows to offer itself as a place to throw a widget away — and not light
+    /// up when a gallery card is picked up from on top of it.
+    @State private var draggingTile: UUID?
+    @State private var overGallery = false
 
     @ObservedObject private var settings = Settings.shared
 
@@ -201,6 +207,7 @@ struct HomeLayoutEditor: View {
         .animation(.spring(response: 0.38, dampingFraction: 0.8), value: rowTiles.map(\.span))
         .dropDestination(for: String.self) { items, _ in
             dropTargetRow = nil
+            draggingTile = nil
             return handleDrop(items, into: row)
         } isTargeted: { targeted in
             withAnimation(.easeOut(duration: 0.12)) {
@@ -255,12 +262,16 @@ struct HomeLayoutEditor: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .contentShape(Rectangle())
         .onTapGesture { selection = isSelected ? nil : tile.id }
-        .draggable(tile.id.uuidString) {
+        .onDrag {
+            draggingTile = tile.id
+            return NSItemProvider(object: tile.id.uuidString as NSString)
+        } preview: {
             dragPreview(kind: tile.kind, name: tile.appName)
         }
         .dropDestination(for: String.self) { items, _ in
             // Dropping one tile onto another puts it in that position, which is
             // how reordering works without an insertion caret to aim at.
+            draggingTile = nil
             guard let raw = items.first else { return false }
             return reorder(raw, before: tile)
         }
@@ -318,12 +329,6 @@ struct HomeLayoutEditor: View {
                         .controlSize(.small)
                 }
                 Spacer(minLength: 8)
-                Button(role: .destructive) {
-                    remove(tile)
-                } label: {
-                    Label("Remove", systemImage: "trash")
-                }
-                .controlSize(.small)
             } else {
                 Image(systemName: "hand.point.up.left.fill")
                     .foregroundStyle(.white.opacity(0.4))
@@ -349,8 +354,11 @@ struct HomeLayoutEditor: View {
                     }
                 }
                 .controlSize(.small)
-                trash
             }
+            // Outside the if: it used to live only in the "nothing selected"
+            // half, so clicking a widget and then dragging it — the natural
+            // order — found the bin gone.
+            trash
         }
         .frame(height: 34)
         .padding(.horizontal, 12)
@@ -365,31 +373,48 @@ struct HomeLayoutEditor: View {
         .animation(.easeOut(duration: 0.15), value: selection)
     }
 
-    /// Somewhere to throw a widget you are done with.
+    /// Somewhere to throw a widget you are done with. Also a button: with a
+    /// widget selected, clicking it removes that one.
     private var trash: some View {
-        HStack(spacing: 4) {
-            Image(systemName: overTrash ? "trash.fill" : "trash")
-            Text("Drop to remove")
+        let label = selectedTile == nil ? "Drop to remove" : "Remove"
+        return Button {
+            if let tile = selectedTile { remove(tile) }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: overTrash ? "trash.fill" : "trash")
+                Text(overTrash ? "Let go to remove" : label)
+            }
+            .font(.system(size: 11, weight: overTrash ? .semibold : .regular))
+            .foregroundStyle(overTrash || selectedTile != nil ? Color.red : Color.white.opacity(0.5))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(overTrash ? Color.red.opacity(0.22) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: overTrash ? [] : [3, 2.5]))
+                    .foregroundStyle(overTrash ? Color.red.opacity(0.8) : Color.white.opacity(0.2))
+            )
+            .scaleEffect(overTrash ? 1.08 : 1)
+            .contentShape(Capsule())
         }
-        .font(.system(size: 11))
-        .foregroundStyle(overTrash ? Color.red : Color.white.opacity(0.5))
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(
-            Capsule().fill(overTrash ? Color.red.opacity(0.18) : Color.white.opacity(0.05))
-        )
-        .overlay(
-            Capsule()
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 2.5]))
-                .foregroundStyle(overTrash ? Color.red.opacity(0.7) : Color.white.opacity(0.2))
-        )
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: overTrash)
         .dropDestination(for: String.self) { items, _ in
             overTrash = false
-            guard let raw = items.first, let id = UUID(uuidString: raw),
-                  let tile = tiles.first(where: { $0.id == id }) else { return false }
-            remove(tile)
-            return true
+            draggingTile = nil
+            return discard(items.first)
         } isTargeted: { overTrash = $0 }
+        .help(selectedTile == nil ? "Drag a widget here to remove it" : "Remove the selected widget")
+    }
+
+    /// Removes the widget a drop carries, if it carries one.
+    private func discard(_ raw: String?) -> Bool {
+        guard let raw, let id = UUID(uuidString: raw),
+              let tile = tiles.first(where: { $0.id == id }) else { return false }
+        remove(tile)
+        return true
     }
 
     private var slotMenu: some View {
@@ -459,6 +484,37 @@ struct HomeLayoutEditor: View {
             // Always at least a row of it, however short the window.
             .frame(minHeight: 110, maxHeight: .infinity)
         }
+        .overlay {
+            if overGallery {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.red.opacity(0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    )
+                    .overlay(
+                        Label("Drop here to remove it", systemImage: "trash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.red.opacity(0.85)))
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        // Dragging a widget off the notch and back to the gallery puts it
+        // away: a far bigger target than the bin, and the obvious place.
+        .dropDestination(for: String.self) { items, _ in
+            overGallery = false
+            draggingTile = nil
+            return discard(items.first)
+        } isTargeted: { targeted in
+            withAnimation(.easeOut(duration: 0.12)) {
+                overGallery = targeted && draggingTile != nil
+            }
+        }
         .disabled(isInheriting)
         .opacity(isInheriting ? 0.5 : 1)
     }
@@ -505,7 +561,10 @@ struct HomeLayoutEditor: View {
         )
         .opacity(placed ? 0.55 : 1)
         .contentShape(Rectangle())
-        .draggable("kind:" + kind.rawValue) {
+        .onDrag {
+            draggingTile = nil
+            return NSItemProvider(object: ("kind:" + kind.rawValue) as NSString)
+        } preview: {
             dragPreview(kind: kind, name: nil)
         }
     }

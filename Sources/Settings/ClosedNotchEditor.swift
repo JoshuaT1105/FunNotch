@@ -12,6 +12,10 @@ struct ClosedNotchEditor: View {
     @StateObject private var preview = NotchViewModel.makePreview()
     @ObservedObject private var settings = Settings.shared
     @State private var targetedSide: NotchSide?
+    /// Whether the drag in flight is a placed widget, which the palette will
+    /// take back. Palette cards clear it as they are picked up.
+    @State private var draggingPlaced = false
+    @State private var overPalette = false
 
     private let scale: CGFloat = 1.55
 
@@ -92,6 +96,7 @@ struct ClosedNotchEditor: View {
             )
             .dropDestination(for: String.self) { items, _ in
                 targetedSide = nil
+                draggingPlaced = false
                 return accept(items.first, on: side, before: nil)
             } isTargeted: { isTargeted in
                 withAnimation(.easeOut(duration: 0.12)) {
@@ -125,11 +130,15 @@ struct ClosedNotchEditor: View {
         .padding(.vertical, 6)
         .background(Capsule().fill(widget.tint.opacity(0.16)))
         .overlay(Capsule().strokeBorder(widget.tint.opacity(0.35), lineWidth: 0.6))
-        .draggable("placed:\(side == .leading ? "L" : "R"):\(widget.rawValue)") {
+        .onDrag {
+            draggingPlaced = true
+            return NSItemProvider(object: "placed:\(side == .leading ? "L" : "R"):\(widget.rawValue)" as NSString)
+        } preview: {
             chipPreview(widget)
         }
         .dropDestination(for: String.self) { items, _ in
-            accept(items.first, on: side, before: widget)
+            draggingPlaced = false
+            return accept(items.first, on: side, before: widget)
         }
     }
 
@@ -189,6 +198,41 @@ struct ClosedNotchEditor: View {
             // Always at least a row of it, however short the window.
             .frame(minHeight: 110, maxHeight: .infinity)
         }
+        .overlay {
+            if overPalette {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.red.opacity(0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    )
+                    .overlay(
+                        Label("Drop here to remove it", systemImage: "trash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.red.opacity(0.85)))
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        // Dragging a placed widget back to the palette takes it off its side.
+        .dropDestination(for: String.self) { items, _ in
+            overPalette = false
+            draggingPlaced = false
+            guard let raw = items.first, raw.hasPrefix("placed:") else { return false }
+            let parts = raw.split(separator: ":", maxSplits: 2).map(String.init)
+            guard parts.count == 3, let widget = NotchWidget(rawValue: parts[2]) else { return false }
+            let side: NotchSide = parts[1] == "L" ? .leading : .trailing
+            setWidgets(widgets(on: side).filter { $0 != widget }, on: side)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.easeOut(duration: 0.12)) {
+                overPalette = targeted && draggingPlaced
+            }
+        }
         .disabled(!settings.idleWidgetsEnabled)
         .opacity(settings.idleWidgetsEnabled ? 1 : 0.45)
     }
@@ -210,7 +254,10 @@ struct ClosedNotchEditor: View {
                 .fill(Color.white.opacity(0.055))
         )
         .contentShape(Rectangle())
-        .draggable("widget:" + widget.rawValue) {
+        .onDrag {
+            draggingPlaced = false
+            return NSItemProvider(object: ("widget:" + widget.rawValue) as NSString)
+        } preview: {
             chipPreview(widget)
         }
     }
