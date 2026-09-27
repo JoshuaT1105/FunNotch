@@ -42,10 +42,11 @@ Free and open source. No account, no subscription, no telemetry.
 - **Clipboard** — searchable history with pinning, and entries that expire after
   24 hours by default. Anything a password manager marks concealed is skipped
   and never recorded.
-- **Focus** — sessions that block websites and apps, with Pomodoro cycles.
+- **Focus & Timer** — focus sessions that block websites and apps, with
+  Pomodoro cycles, a week chart and a streak; plus a countdown and a stopwatch
+  with laps, all around one dial you drag round to set.
 - **Notes** — a scratchpad that starts a new note each day and saves to your
   Desktop, with the old ones a menu away.
-- **Timer** — countdowns and a stopwatch with laps.
 - **Battery** — charge level, and while charging the actual wattage, with the
   meter coloured and animated by state.
 - **Widgets** — thirteen of them, any number either side of the camera.
@@ -54,7 +55,8 @@ Free and open source. No account, no subscription, no telemetry.
 - **No notch? Still works.** On an external display it draws a floating pill in
   the same place, like the Dynamic Island.
 - **And** — camera mirror, calendar and reminders, meeting-link detection,
-  custom themes, automatic updates, a diagnostics screen, and a small game.
+  custom themes, automatic updates, a diagnostics screen, and two games:
+  Breakout and Dino Run.
 
 <table>
 <tr>
