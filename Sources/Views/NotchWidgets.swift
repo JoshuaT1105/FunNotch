@@ -162,7 +162,7 @@ private struct ClockWidget: View {
     var body: some View {
         // A minute-granularity timeline keeps this honest without a timer.
         TimelineView(.everyMinute) { context in
-            Text(Self.formatter(showsDate: showsDate).string(from: context.date))
+            Text(Self.formatter(showsDate: showsDate).string(from: Motion.filmDate ?? context.date))
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.85))

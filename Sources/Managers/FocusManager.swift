@@ -384,11 +384,11 @@ final class FocusManager: ObservableObject {
 
     /// Puts the manager into a running-looking state without starting the timer
     /// or touching any browser. Used by the snapshot renderer.
-    func injectPreviewSession(minutes: Int, elapsedFraction: Double) {
+    func injectPreviewSession(minutes: Int, elapsedFraction: Double, blocked: Int = 3, now: Date = Date()) {
         totalDuration = TimeInterval(minutes * 60)
         remaining = totalDuration * (1 - elapsedFraction)
-        endDate = Date().addingTimeInterval(remaining)
-        blockedCount = 3
+        endDate = now.addingTimeInterval(remaining)
+        blockedCount = blocked
         isActive = true
     }
 

@@ -42,3 +42,6 @@ brag-output/
 
 # Local SEO working notes for funnotch.xyz, which is not part of this repo.
 seo-fixes/
+
+# Launch-video renders from /brag: 55 MB of footage, music and output each.
+brag-output*/

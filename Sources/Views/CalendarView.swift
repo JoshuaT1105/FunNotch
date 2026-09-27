@@ -54,22 +54,35 @@ struct CalendarPane: View {
 
     // MARK: - Agenda
 
+    @ViewBuilder
     private var agenda: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(manager.items) { item in
-                        AgendaRow(item: item)
-                            .id(item.id)
-                    }
+        if Motion.filmTime != nil {
+            // The film renderer draws offscreen, where a scroll view (an
+            // AppKit view underneath) comes out blank.
+            agendaRows
+                .frame(maxHeight: .infinity, alignment: .top)
+                .clipped()
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    agendaRows
                 }
-                .padding(.trailing, 2)
-            }
-            .onAppear {
-                guard let next = manager.items.first(where: { ($0.start ?? .distantPast) >= Date() }) else { return }
-                proxy.scrollTo(next.id, anchor: .top)
+                .onAppear {
+                    guard let next = manager.items.first(where: { ($0.start ?? .distantPast) >= Date() }) else { return }
+                    proxy.scrollTo(next.id, anchor: .top)
+                }
             }
         }
+    }
+
+    private var agendaRows: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(manager.items) { item in
+                AgendaRow(item: item)
+                    .id(item.id)
+            }
+        }
+        .padding(.trailing, 2)
     }
 
     private var emptyState: some View {

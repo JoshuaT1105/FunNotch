@@ -242,6 +242,10 @@ enum HomeLayout {
         }
     }
 
+    /// Set by the film renderer: a layout for the video that is never saved,
+    /// so rendering one does not rearrange anybody's home screen.
+    nonisolated(unsafe) static var filmTiles: [HomeTile]?
+
     static func tiles(in layout: [HomeTile], row: Int) -> [HomeTile] {
         layout.filter { $0.row == row }
     }

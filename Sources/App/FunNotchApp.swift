@@ -36,6 +36,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Film mode renders the notch frame by frame for a video and exits.
+        if let directory = FilmRenderer.requestedDirectory() {
+            FilmRenderer.run(into: directory)
+            return
+        }
+
         if let path = SelfTest.fileToCheck {
             SelfTest.checkFile(path)
             return

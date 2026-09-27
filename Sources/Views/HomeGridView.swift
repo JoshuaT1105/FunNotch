@@ -18,7 +18,7 @@ struct HomeGridView: View {
     var body: some View {
         // Which whole layout applies right now.
         let active = LayoutCaseResolver.active(settings: settings)
-        let tiles = settings.homeTiles(for: active) ?? settings.homeTiles
+        let tiles = HomeLayout.filmTiles ?? settings.homeTiles(for: active) ?? settings.homeTiles
         let top = HomeLayout.tiles(in: tiles, row: 0)
         let bottom = HomeLayout.tiles(in: tiles, row: 1)
 

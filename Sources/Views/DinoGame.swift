@@ -1251,9 +1251,9 @@ final class DinoGame {
         }
     }
 
-    func placeForTesting(_ kind: ObstacleKind, at x: CGFloat, level: Int = 0, tall: Bool = false) {
+    func placeForTesting(_ kind: ObstacleKind, at x: CGFloat, level: Int = 0, tall: Bool = false, stems: Int = 1) {
         switch kind {
-        case .cactus: obstacles.append(cactus(at: x, stems: 1, tall: tall))
+        case .cactus: obstacles.append(cactus(at: x, stems: stems, tall: tall))
         case .rock: obstacles.append(rock(at: x))
         case .bird: obstacles.append(bird(at: x, level: level))
         case .tumbleweed: obstacles.append(tumbleweed(at: x))
@@ -1274,6 +1274,28 @@ final class DinoGame {
         case .magnet: magnetLeft = power.duration
         case .turbo: turboLeft = power.duration
         }
+    }
+
+    /// Sets up a run for the film renderer: running at a given score with
+    /// nothing on the ground yet, so the obstacles can be placed where the
+    /// edit needs the jumps. Nothing is saved.
+    func startForFilm(size: CGSize, score: Double, date: Date) {
+        isPreview = true
+        isPaused = false
+        lastUpdate = nil
+        advance(to: date, size: size)
+        restart()
+        exactScore = score
+        milestonesReached = Int(score) / 100
+        runTime = score / 12
+        // A best to chase that this run will not reach, so the film is not
+        // interrupted by a "New best!".
+        highScore = max(highScore, 1204)
+        bestAtStart = highScore
+        obstacles.removeAll()
+        gems.removeAll()
+        nextObstacleIn = .greatestFiniteMagnitude
+        nextOrbIn = .greatestFiniteMagnitude
     }
 
     func placeGemForTesting(x: CGFloat, altitude: CGFloat) {

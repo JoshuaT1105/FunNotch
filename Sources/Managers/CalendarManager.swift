@@ -88,6 +88,13 @@ final class CalendarManager: ObservableObject {
     @Published private(set) var calendars: [EKCalendar] = []
     @Published private(set) var hasEventAccess = false
     @Published private(set) var hasReminderAccess = false
+
+    /// Replaces the agenda with invented items, as if Calendar access had
+    /// been granted. For the film renderer; nothing is read or written.
+    func injectPreviewItems(_ list: [AgendaItem]) {
+        items = list
+        hasEventAccess = true
+    }
     @Published var selectedDate = Calendar.current.startOfDay(for: Date())
 
     private let store = EKEventStore()

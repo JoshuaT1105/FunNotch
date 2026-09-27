@@ -52,7 +52,7 @@ struct GameView: View {
         TimelineView(.animation) { timeline in
             VStack(spacing: 6) {
                 header
-                board(now: timeline.date)
+                board(now: Motion.filmDate ?? timeline.date)
             }
         }
         .padding(.top, 3)
@@ -66,6 +66,9 @@ struct GameView: View {
     // MARK: Lifecycle
 
     private func appear() {
+        // The film renderer draws this tab frame by frame; none of the live
+        // machinery — sound, the pointer, the keyboard — belongs in that.
+        guard Motion.filmTime == nil else { return }
         GameSound.shared.start()
         BreakoutGame.shared.resumeAfterOpen()
         DinoGame.shared.resumeAfterOpen()
@@ -77,6 +80,7 @@ struct GameView: View {
     }
 
     private func disappear() {
+        guard Motion.filmTime == nil else { return }
         MouseTracker.shared.removeMoveObserver("breakout")
         BreakoutGame.shared.pauseForClose()
         DinoGame.shared.pauseForClose()
@@ -164,13 +168,16 @@ struct GameView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
-        .background(
+        .background {
             // The paddle tracks the pointer in screen coordinates, so the board
-            // has to say where on screen it actually is.
-            ScreenFrameReader { frame in
-                BreakoutGame.shared.boardScreenFrame = frame
+            // has to say where on screen it actually is. Not while filming:
+            // an offscreen renderer cannot draw an AppKit view.
+            if Motion.filmTime == nil {
+                ScreenFrameReader { frame in
+                    BreakoutGame.shared.boardScreenFrame = frame
+                }
             }
-        )
+        }
         .overlay {
             GameOverlayCard(choice: choice)
         }

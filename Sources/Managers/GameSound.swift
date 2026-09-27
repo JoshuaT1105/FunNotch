@@ -147,6 +147,13 @@ final class GameSound {
         Int(buffer(for: effect)?.frameLength ?? 0)
     }
 
+    /// Writes an effect to a WAV file, for the film renderer's soundtrack.
+    func writeWAV(_ effect: Effect, to url: URL) throws {
+        guard let buffer = buffer(for: effect) else { return }
+        let file = try AVAudioFile(forWriting: url, settings: buffer.format.settings)
+        try file.write(from: buffer)
+    }
+
     /// The loudest sample in an effect, for the self-test: nothing may clip.
     func peak(of effect: Effect) -> Float {
         guard let buffer = buffer(for: effect), let samples = buffer.floatChannelData?[0] else { return 0 }

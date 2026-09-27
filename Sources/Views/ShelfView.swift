@@ -107,17 +107,30 @@ struct ShelfView: View {
         }
     }
 
+    @ViewBuilder
     private var itemGrid: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: [GridItem(.flexible())], spacing: 8) {
+        if Motion.filmTime != nil {
+            // Offscreen, a scroll view draws blank; lay the row out flat.
+            HStack(spacing: 8) {
                 ForEach(shelf.items) { item in
                     ShelfItemTile(item: item)
                 }
             }
             .padding(.horizontal, 2)
             .padding(.bottom, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHGrid(rows: [GridItem(.flexible())], spacing: 8) {
+                    ForEach(shelf.items) { item in
+                        ShelfItemTile(item: item)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.bottom, 4)
+            }
+            .frame(maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity)
     }
 }
 

@@ -23,6 +23,14 @@ enum Motion {
     /// Set by the snapshot renderer: every entrance is drawn finished.
     nonisolated(unsafe) static var snapshotMode = false
 
+    /// Set by the film renderer (`--render-film`): seconds since the shot
+    /// began. Every clock-driven view reads this instead of the wall clock, so
+    /// a video can be rendered one exact frame at a time.
+    nonisolated(unsafe) static var filmTime: Double?
+
+    /// The wall-clock time the film pretends it is, advancing with the shot.
+    nonisolated(unsafe) static var filmDate: Date?
+
     static func clamp(_ x: Double) -> Double { min(max(x, 0), 1) }
 
     /// 0 → 1 over `duration`, starting after `delay`.
@@ -61,7 +69,9 @@ struct IntroTimeline<Content: View>: View {
     @State private var settled = false
 
     var body: some View {
-        if Motion.snapshotMode {
+        if let film = Motion.filmTime {
+            content(film)
+        } else if Motion.snapshotMode {
             content(60)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: settled)) { context in
@@ -87,7 +97,9 @@ struct ClaudeSpinner: View {
     private static let interval = 0.12
 
     var body: some View {
-        if Motion.snapshotMode {
+        if let film = Motion.filmTime {
+            glyph(Self.frames[Int(film / Self.interval) % Self.frames.count])
+        } else if Motion.snapshotMode {
             glyph(Self.frames[4])
         } else {
             TimelineView(.periodic(from: .now, by: Self.interval)) { context in
@@ -113,7 +125,8 @@ struct OrbitSpinner: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let angle = Motion.snapshotMode ? 40 : context.date.timeIntervalSinceReferenceDate * 300
+            let angle = Motion.filmTime.map { $0 * 300 }
+                ?? (Motion.snapshotMode ? 40 : context.date.timeIntervalSinceReferenceDate * 300)
             ZStack {
                 Circle().stroke(tint.opacity(0.25), lineWidth: 1.6)
                 Circle()
@@ -149,7 +162,7 @@ struct AgentWaitingGlyph: View {
     var time: Double?
 
     var body: some View {
-        if let time {
+        if let time = time ?? Motion.filmTime {
             drawn(time)
         } else if Motion.snapshotMode {
             drawn(1.1)

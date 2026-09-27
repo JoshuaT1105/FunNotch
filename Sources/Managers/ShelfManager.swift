@@ -179,6 +179,21 @@ final class ShelfManager: NSObject, ObservableObject {
         }
     }
 
+    /// Invented items that carry their own thumbnails, for the film renderer.
+    func injectPreviewItems(_ list: [(name: String, thumbnail: NSImage?)]) {
+        items = list.enumerated().map { index, entry in
+            ShelfItem(
+                id: UUID(),
+                url: URL(fileURLWithPath: "/private/preview").appendingPathComponent(entry.name),
+                name: entry.name,
+                size: Int64(1_240_000 + index * 4_400),
+                addedAt: Date(timeIntervalSince1970: 1_780_000_000 - Double(index) * 900),
+                isTemporary: false,
+                thumbnail: entry.thumbnail
+            )
+        }
+    }
+
     private func restore() {
         guard let bookmarks = UserDefaults.standard.array(forKey: bookmarksKey) as? [Data] else { return }
         var restored: [ShelfItem] = []
