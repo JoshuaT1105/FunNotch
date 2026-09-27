@@ -1,9 +1,17 @@
-name: Release
+name: Release build check
 
-# Push a tag like v1.0.2 and this builds the universal app, packages it, and
-# attaches the dmg and zip to a GitHub Release. Those release assets are what
-# funnotch.xyz counts downloads from, so every release updates the counter on
-# the site automatically with no backend anywhere.
+# Push a tag like v1.3 and this builds the universal app from that tag and runs
+# the self-test on a clean machine, so a release never ships source that only
+# builds on one Mac. The results are kept as a workflow artifact.
+#
+# It deliberately does NOT attach anything to the GitHub Release. Releases are
+# built, self-tested and EdDSA-signed locally (the signing key never leaves the
+# login Keychain — see Tools/make-appcast.sh), and a Sparkle signature only
+# matches the exact bytes it was made for. This workflow used to upload its own
+# rebuilt dmgs over the signed ones a few minutes after each release, so the
+# files on GitHub stopped matching appcast.xml and every in-app update of 1.1
+# and 1.2 failed with "The update is improperly signed". After a release, run
+# Tools/verify-appcast.sh to check the published files against the appcast.
 on:
   push:
     tags:
@@ -11,7 +19,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -33,25 +41,11 @@ jobs:
       - name: Self-test
         run: build/FunNotch.app/Contents/MacOS/FunNotch --self-test
 
-      # A second copy under a name with no version in it. The website's Download
-      # button points at /releases/latest/download/FunNotch.dmg, and that URL only
-      # keeps working if every release carries an asset with exactly that name —
-      # a versioned filename would break the button on every release.
-      - name: Add a stable-named copy for the website
-        run: |
-          cp dist/FunNotch-*.dmg dist/FunNotch.dmg
-          ls -la dist/
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
+      - name: Keep the build for inspection
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: FunNotch-${{ github.ref_name }}
+          path: |
             dist/*.dmg
             dist/*.zip
-          generate_release_notes: true
-          body: |
-            Built from `${{ github.sha }}` by GitHub Actions.
-
-            **This build is signed ad-hoc, not notarised.** macOS will refuse
-            the first launch — https://funnotch.xyz/install explains how to open
-            it and what the warning does and does not mean.
+          retention-days: 14

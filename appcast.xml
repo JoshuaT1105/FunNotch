@@ -9,7 +9,7 @@
             <sparkle:version>5</sparkle:version>
             <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.2/FunNotch-1.2.dmg" length="4591707" type="application/octet-stream" sparkle:edSignature="Rbx1kRuHVhZ1vatquEtc7nsVFTTH8r7aicgh5M+XaLdYbfmaebDzx9T5X8vORFKPqT7BOlr79dbrWORnB08ZBA=="/>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.2/FunNotch-1.2.dmg" length="4656793" type="application/octet-stream" sparkle:edSignature="vuSIpPj9UrKNLq2NB2B6mXXDrj9Qwe6mwtCfdT9Kx60qYIktSuYQMmKidt1XLn6BMkb2ZbfD10nyGRQ0JxJPCw=="/>
         </item>
         <item>
             <title>1.1</title>
@@ -18,7 +18,7 @@
             <sparkle:version>4</sparkle:version>
             <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.1/FunNotch-1.1.dmg" length="4306381" type="application/octet-stream" sparkle:edSignature="0+LlAZHnaOmSaIqMt5TIiUm87X4S2XvDxroRAKFMecGu/A8vbPpx2d6MYLJa0p3hHad4sZGCde6qs5NIDhq9AA=="/>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.1/FunNotch-1.1.dmg" length="4362479" type="application/octet-stream" sparkle:edSignature="kL81aR0BR2kZJA/z06Rv3OPEdIe9uIDtuTIWUxfszGSK/aJcNLJvCLOQzPNf+X/11eHveEsyA8f7T6oHzsjfDw=="/>
         </item>
     </channel>
 </rss>
