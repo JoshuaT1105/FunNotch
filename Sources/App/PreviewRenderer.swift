@@ -201,6 +201,20 @@ enum PreviewRenderer {
             BreakoutGame.shared.playForPreview(seconds: 4.3)
         }))
 
+        // Later in a run: explosives, lasers and a fireball on the Invader.
+        scenes.append(("open-game-chaos", { viewModel in
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            BreakoutGame.shared.playForPreview(seconds: 1.6, level: 4, effects: [.laser, .fireball, .multiball])
+        }))
+
+        // Every kind of brick, untouched: steel, explosive, gold, mystery.
+        scenes.append(("open-game-fortress", { viewModel in
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            BreakoutGame.shared.playForPreview(seconds: 0, level: 5)
+        }))
+
         scenes.append(("closed-music-and-widgets", { viewModel in
             let settings = Settings.shared
             settings.idleWidgetsEnabled = true

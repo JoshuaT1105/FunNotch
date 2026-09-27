@@ -911,6 +911,66 @@ enum SelfTest {
         game.primaryAction()
         check("clicking again resumes", !game.isPaused)
 
+        // MARK: Editor drags
+        // The Customize editors start a drag with an NSItemProvider, so they
+        // know one is under way, and receive it as a Transferable string. If
+        // that handoff failed, every drag in both editors would silently do
+        // nothing — adding, reordering and throwing away alike.
+        final class Box: @unchecked Sendable { var text: String? }
+        let payload = Box()
+        let provider = NSItemProvider(object: "funnotch-drag-test" as NSString)
+        _ = provider.loadTransferable(type: String.self) { result in
+            let text = try? result.get()
+            DispatchQueue.main.async { payload.text = text }
+        }
+        let dragDeadline = Date().addingTimeInterval(3)
+        while payload.text == nil, Date() < dragDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        check("a dragged widget arrives at a drop target intact", payload.text == "funnotch-drag-test",
+              detail: payload.text ?? "nothing arrived")
+
+        let savedBestLevel = Settings.shared.gameBestLevel
+        check(
+            "every board is fourteen cells wide",
+            BreakoutLevels.boards.allSatisfy { $0.rows.allSatisfy { $0.count == BreakoutGame.columns } }
+        )
+        check(
+            "every board has something to break",
+            BreakoutLevels.boards.allSatisfy { $0.rows.joined().contains(where: { "123X$?".contains($0) }) }
+        )
+
+        // Two explosives side by side: setting off one sets off the other, and
+        // between them they take the whole block.
+        game.loadForTesting(["1XX1", "1111"], size: boardSize)
+        let blockSize = game.bricks.count
+        game.breakForTesting(row: 0, column: 1)
+        game.settleForTesting(seconds: 0.5)
+        check(
+            "an explosion takes its neighbours and sets off the next",
+            game.bricks.isEmpty,
+            detail: "\(blockSize) → \(game.bricks.count)"
+        )
+        check("a chain of breaks raises the multiplier", game.multiplier >= 2, detail: "×\(game.multiplier)")
+
+        // Steel never breaks, so it cannot be what stands between you and the
+        // next board.
+        let levelBefore = game.level
+        game.loadForTesting(["#1"], size: boardSize)
+        game.breakForTesting(row: 0, column: 1)
+        // Two frames: the first after a resume only sets the clock.
+        for _ in 0 ..< 2 {
+            clock += 1.0 / 60
+            game.advance(to: clock, size: boardSize)
+        }
+        check("steel does not have to be broken to clear a board", game.level == levelBefore + 1)
+
+        check(
+            "the game's sounds synthesise",
+            GameSound.shared.frames(of: .boom) > 0 && GameSound.shared.frames(of: .brick(3)) > 0
+        )
+
+        Settings.shared.gameBestLevel = savedBestLevel
         Settings.shared.gameHighScore = savedHighScore
 
         // MARK: Drag-to-notch drop zone

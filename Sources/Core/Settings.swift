@@ -859,6 +859,18 @@ final class Settings: ObservableObject {
         set { write("gameHighScore", newValue) }
     }
 
+    /// Notch Breakout's blips. On, but quiet, and muted from the game's header.
+    var gameSoundEnabled: Bool {
+        get { bool("gameSoundEnabled", true) }
+        set { write("gameSoundEnabled", newValue) }
+    }
+
+    /// The furthest board reached in any run.
+    var gameBestLevel: Int {
+        get { integer("gameBestLevel", 1) }
+        set { write("gameBestLevel", newValue) }
+    }
+
     // MARK: - Agents
 
     /// A small spinner beside the cutout while a Claude Code or Codex session
@@ -915,7 +927,7 @@ final class Settings: ObservableObject {
         "focusPomodoro", "focusBreakMinutes", "focusBlockedApps", "focusStartShortcut",
         "focusEndShortcut", "focusSessionsCompleted", "focusMinutesTotal",
         "catchDownloads", "downloadsToShelf", "shelfExpiryHours", "shelfFolderTargets",
-        "clipboardPinned", "themes", "activeThemeName", "gameHighScore",
+        "clipboardPinned", "themes", "activeThemeName", "gameHighScore", "gameSoundEnabled", "gameBestLevel",
         "catchScreenshots", "catchScreenRecordings", "clipboardHistoryEnabled",
         "clipboardHistoryLimit", "bluetoothActivity",
         "focusShowInClosedNotch", "focusPauseMusic", "showPageAccessHint",
