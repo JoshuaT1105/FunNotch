@@ -462,6 +462,7 @@ final class DinoGame {
 
     private func restart() {
         exactScore = 0
+        milestonesReached = 0
         distance = 0
         runTime = 0
         speed = Self.startSpeed
@@ -599,16 +600,7 @@ final class DinoGame {
         distance += travel
         stride += Double(travel) / 9
 
-        let before = score
         exactScore += Double(travel) / 22
-        if score / 100 > before / 100 {
-            milestoneGlow = 1
-            sound.play(.milestone)
-            if score % 1000 == 0 {
-                show("\(score.formatted())!", for: 1.4)
-            }
-        }
-        recordHighScore()
 
         stepDinoPhysics(dt)
         moveWorld(travel, dt: dt)
@@ -616,6 +608,8 @@ final class DinoGame {
         collide()
         collectGems()
         collectOrbs()
+        celebrateMilestones()
+        recordHighScore()
 
         // Dust from the feet while running.
         if isOnGround, !isDucking || Int(clock * 20) % 2 == 0 {
@@ -1046,6 +1040,21 @@ final class DinoGame {
     }
 
     // MARK: - Scores
+
+    /// Hundreds already celebrated. Checked after everything that scores, so
+    /// a hundred passed on a gem or a close call is not skipped.
+    private var milestonesReached = 0
+
+    private func celebrateMilestones() {
+        let reached = score / 100
+        guard reached > milestonesReached else { return }
+        milestonesReached = reached
+        milestoneGlow = 1
+        sound.play(.milestone)
+        if reached % 10 == 0 {
+            show("\((reached * 100).formatted())!", for: 1.4)
+        }
+    }
 
     private func recordHighScore() {
         if bestAtStart > 0, score > bestAtStart, !beatHighScore {

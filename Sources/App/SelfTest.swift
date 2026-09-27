@@ -1118,6 +1118,16 @@ enum SelfTest {
         runDino(seconds: 1, autopilot: false)
         check("running through a gem collects it", dino.gemsThisRun == 1)
 
+        // A hundred passed on a gem's bonus is still celebrated. It used to be
+        // checked only as distance was added, so a bonus jumping the score
+        // past a hundred skipped the chime and the glow.
+        dino.startForTesting(size: dinoBoard)
+        dino.setScoreForTesting(95)
+        dino.placeGemForTesting(x: DinoGame.dinoX + 30, altitude: 14)
+        runDino(seconds: 0.3, autopilot: false)
+        check("a hundred reached on a gem bonus still glows", dino.score >= 100 && dino.milestoneGlow > 0.4,
+              detail: "score \(dino.score), glow \(String(format: "%.2f", dino.milestoneGlow))")
+
         // The run speeds up, and the day turns to night.
         dino.startForTesting(size: dinoBoard)
         let startSpeed = dino.speed
