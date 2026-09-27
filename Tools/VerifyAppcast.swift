@@ -27,9 +27,27 @@ else {
     exit(2)
 }
 
+/// Downloads with every cache bypassed. Sparkle asks the server for a fresh
+/// feed, so a copy cached on this Mac from an earlier run would check the
+/// wrong thing.
+func fetch(_ url: URL) -> Data? {
+    if url.isFileURL { return try? Data(contentsOf: url) }
+    final class Box: @unchecked Sendable { var data: Data? }
+    let box = Box()
+    var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 120)
+    request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+    let done = DispatchSemaphore(value: 0)
+    URLSession(configuration: .ephemeral).dataTask(with: request) { data, response, _ in
+        if (response as? HTTPURLResponse)?.statusCode == 200 { box.data = data }
+        done.signal()
+    }.resume()
+    done.wait()
+    return box.data
+}
+
 let source = arguments[2]
 let feedURL = source.hasPrefix("http") ? URL(string: source)! : URL(fileURLWithPath: source)
-guard let feed = try? Data(contentsOf: feedURL),
+guard let feed = fetch(feedURL),
       let document = try? XMLDocument(data: feed)
 else {
     print("could not read the appcast at \(source)")
@@ -55,7 +73,7 @@ for case let item as XMLElement in items {
         .stringValue
         .flatMap { Data(base64Encoded: $0) }
 
-    guard let file = try? Data(contentsOf: url) else {
+    guard let file = fetch(url) else {
         print("\(version): could not download \(address)")
         failures += 1
         continue
