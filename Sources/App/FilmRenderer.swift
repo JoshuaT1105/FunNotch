@@ -66,8 +66,14 @@ enum FilmRenderer {
             left: settings.idleLeftWidgets,
             right: settings.idleRightWidgets,
             minutes: settings.focusDefaultMinutes,
-            game: settings.selectedGame
+            game: settings.selectedGame,
+            mediaDisplay: settings.closedMediaDisplay,
+            peekStyle: settings.sneakPeekStyle,
+            slider: settings.sliderColor,
+            spectrum: settings.spectrumColor,
+            colouredSpectrum: settings.coloredSpectrogram
         )
+        let spectrum = loadSpectrum()
 
         Motion.snapshotMode = false
         let base = filmBaseDate()
@@ -102,6 +108,7 @@ enum FilmRenderer {
                 let t = Double(index) / fps
                 Motion.filmTime = t
                 Motion.filmDate = base.addingTimeInterval(t)
+                Motion.filmSpectrum = spectrum[shot.name].flatMap { index < $0.count ? $0[index] : $0.last }
                 PixelWeatherView.frozenTime = 1000.4 + t
                 shot.pose(viewModel, t)
                 sizes.append(viewModel.contentSize)
@@ -155,11 +162,18 @@ enum FilmRenderer {
         settings.idleRightWidgets = saved.right
         settings.focusDefaultMinutes = saved.minutes
         settings.selectedGame = saved.game
+        settings.closedMediaDisplay = saved.mediaDisplay
+        settings.sneakPeekStyle = saved.peekStyle
+        settings.sliderColor = saved.slider
+        settings.spectrumColor = saved.spectrum
+        settings.coloredSpectrogram = saved.colouredSpectrum
         FocusManager.shared.clearPreviewSession()
         FocusManager.shared.previewHistory = nil
+        MusicManager.shared.clearPreviewTrack()
         HomeLayout.filmTiles = nil
         Motion.filmTime = nil
         Motion.filmDate = nil
+        Motion.filmSpectrum = nil
         print(String(format: "film: done in %.1fs", Date().timeIntervalSince(started)))
         NSApp.terminate(nil)
     }
@@ -175,6 +189,14 @@ enum FilmRenderer {
             viewModel.setPreviewAgentActivity(AgentActivity())
             viewModel.setPreviewMusicActivity(false)
             viewModel.setPreviewFocusActivity(false)
+        }
+
+        // The standard peek, and the player and bars tinted from the cover.
+        func filmMediaSettings() {
+            settings.sneakPeekStyle = .standard
+            settings.sliderColor = .albumArt
+            settings.spectrumColor = .albumArt
+            settings.coloredSpectrogram = true
         }
 
         // Live activities, each from the moment it appears.
@@ -207,18 +229,40 @@ enum FilmRenderer {
             viewModel.expandingView = SneakPeek(show: true, type: .agent)
         }))
 
-        // The home screen, open.
-        list.append(Shot(name: "home", seconds: 3.6, prepare: { viewModel in
+        // The soundtrack arriving as a track change: the cover turns in, the
+        // bars play the music under the video, the title sits in the chin.
+        list.append(Shot(name: "music-peek", seconds: 1.3, prepare: { viewModel in
+            closedBase(viewModel)
+            filmMediaSettings()
+            MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: musicHomeTrackTime, playing: true))
+            viewModel.sneakPeek = SneakPeek(show: true, type: .music)
+        }))
+
+        // The home screen with that music playing: the player beside the
+        // weather and today, two agents at work below. It is paused and played
+        // again on the edit's beats, and the scrubber keeps the soundtrack's
+        // own time.
+        list.append(Shot(name: "music-home", seconds: 6.9, prepare: { viewModel in
+            filmMediaSettings()
             viewModel.previewOpen()
             viewModel.currentTab = .home
             HomeLayout.filmTiles = [
-                HomeTile(kind: .weather, row: 0, span: 6),
-                HomeTile(kind: .calendar, row: 0, span: 5),
+                HomeTile(kind: .nowPlaying, row: 0, span: 6),
+                HomeTile(kind: .weather, row: 0, span: 4),
+                HomeTile(kind: .calendar, row: 0, span: 4),
                 HomeTile(kind: .agents, row: 1, span: 6),
                 HomeTile(kind: .quickActions, row: 1, span: 3),
                 HomeTile(kind: .battery, row: 1, span: 2),
             ]
             AgentSessionsManager.shared.injectPreviewSessions(filmSessions())
+            MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: musicHomeTrackTime, playing: true))
+            viewModel.setPreviewMusicActivity(true)
+        }, pose: { _, t in
+            let playing = t < musicPauseAt || t >= musicResumeAt
+            let elapsed = t < musicPauseAt
+                ? musicHomeTrackTime + t
+                : (playing ? musicResumeTrackTime + (t - musicResumeAt) : musicHomeTrackTime + musicPauseAt)
+            MusicManager.shared.injectPreviewPlayback(elapsed: elapsed, isPlaying: playing)
         }))
 
         // The shelf: the drop zone lighting up, then holding the file.
@@ -266,14 +310,19 @@ enum FilmRenderer {
             DinoGame.shared.autopilot()
         }, observe: dinoEvents()))
 
-        // Closed again, but wearing its widgets now.
-        list.append(Shot(name: "closed-widgets", seconds: 1.0, prepare: { viewModel in
+        // Closed again, still playing: the cover and the clock on one side of
+        // the camera, the bars and the weather on the other.
+        list.append(Shot(name: "closed-media", seconds: 4.6, prepare: { viewModel in
             closedBase(viewModel)
+            filmMediaSettings()
             settings.idleWidgetsEnabled = true
             settings.idleLeftWidgets = [.clock]
             settings.idleRightWidgets = [.weather]
+            settings.closedMediaDisplay = .mediaAndWidgets
+            MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: musicHomeTrackTime, playing: true))
+            viewModel.setPreviewMusicActivity(true)
             viewModel.expandingView = SneakPeek()
-            measureWidgets(viewModel)
+            measureWidgets(viewModel, besideMedia: true)
         }))
 
         return list
@@ -284,7 +333,15 @@ enum FilmRenderer {
     /// When Start is pressed in the focus shot. The video lines this up with
     /// a beat, so it is shared with the composition through film.json's
     /// timing and the same constants in the cursor path.
-    static let focusStartsAt = 2.18
+    static let focusStartsAt = 2.0
+
+    /// The soundtrack's position when the home opens, and when it is paused
+    /// and played again in that shot. The edit stops the music for the second
+    /// between, and plays it again from the drop, 16.02s into the track.
+    static let musicHomeTrackTime = 13.02
+    static let musicPauseAt = 2.5
+    static let musicResumeAt = 3.5
+    static let musicResumeTrackTime = 16.02
 
     /// The dial is wound from 5 to 25 minutes between these times, easing in
     /// and out, and snaps to five-minute detents as the real one does.
@@ -300,9 +357,8 @@ enum FilmRenderer {
         min(max(Int((focusDialAngle(at: t) / 30).rounded()) * 5, 5), 25)
     }
 
-    /// A run that jumps a cactus pair under an arc of gems at 1.09s, a low
-    /// pterodactyl at 2.19s and a tall cactus at 3.28s — the beats the edit
-    /// cuts on.
+    /// A run that jumps a cactus pair under an arc of gems at 1s, a low
+    /// pterodactyl at 2s and a tall cactus at 3s — the beats the edit cuts on.
     private static func stageDinoRun(base: Date) {
         let game = DinoGame.shared
         let board = CGSize(width: openNotchSize.width - 44, height: 133)
@@ -313,7 +369,7 @@ enum FilmRenderer {
         let lead = speed * 0.2 + 8
         func groundX(jumpingAt t: CGFloat) -> CGFloat { DinoGame.dinoX + lead + speed * t }
 
-        let first = groundX(jumpingAt: 1.09)
+        let first = groundX(jumpingAt: 1.0)
         game.placeForTesting(.cactus, at: first, stems: 2)
         for index in 0 ..< 5 {
             let u = CGFloat(index) / 4
@@ -322,8 +378,8 @@ enum FilmRenderer {
         }
         // Birds fly a little faster than the ground scrolls, and are placed
         // where a ground obstacle would be, so aim by the ground's timing.
-        game.placeForTesting(.bird, at: groundX(jumpingAt: 2.19), level: 0)
-        game.placeForTesting(.cactus, at: groundX(jumpingAt: 3.28), tall: true)
+        game.placeForTesting(.bird, at: groundX(jumpingAt: 2.0), level: 0)
+        game.placeForTesting(.cactus, at: groundX(jumpingAt: 3.0), tall: true)
     }
 
     /// Jumps, landings, gems and milestones as they happen in the dino shot.
@@ -349,7 +405,7 @@ enum FilmRenderer {
     /// the notch widens to fit them. Offscreen that report never comes back,
     /// so take the widths from a first frame's pixels instead, the same way
     /// `NotchWidgetStack` measures itself: its content plus 26 points.
-    private static func measureWidgets(_ viewModel: NotchViewModel) {
+    private static func measureWidgets(_ viewModel: NotchViewModel, besideMedia: Bool = false) {
         guard let image = render(viewModel),
               let data = image.dataProvider?.data,
               let bytes = CFDataGetBytePtr(data)
@@ -375,9 +431,12 @@ enum FilmRenderer {
         let cutoutRight = cutoutLeft + closed
         let contentLeft = CGFloat(left) / scale
         let contentRight = CGFloat(right + 1) / scale
+        // Beside the cover and the bars, those take the first stretch from the
+        // camera, and the widgets only what is beyond it.
+        let media = besideMedia ? NotchViewModel.musicActivityInset : 0
         viewModel.updateMeasuredWidgetWidths([
-            .leading: cutoutLeft - contentLeft + 14,
-            .trailing: contentRight - cutoutRight + 14,
+            .leading: cutoutLeft - contentLeft + 14 - media,
+            .trailing: contentRight - cutoutRight + 14 - media,
         ])
     }
 
@@ -432,6 +491,40 @@ enum FilmRenderer {
             )
         }
         return [make("film-a", "Landing page", since: 134), make("film-b", "Fix login bug", since: 41)]
+    }
+
+    /// The soundtrack, as the track the notch is playing. `FUNNOTCH_FILM_TRACK`
+    /// names it — `title|artist|album|seconds` — so the notch credits the
+    /// music actually under the video.
+    private static func filmTrack(elapsed: TimeInterval, playing: Bool) -> TrackInfo {
+        let parts = (ProcessInfo.processInfo.environment["FUNNOTCH_FILM_TRACK"] ?? "")
+            .split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        let named = parts.count == 4
+        return TrackInfo(
+            title: named ? parts[0] : "Sunset Drive",
+            artist: named ? parts[1] : "FunNotch",
+            album: named ? parts[2] : "Film",
+            artwork: filmCover,
+            duration: named ? Double(parts[3]) ?? 180 : 180,
+            elapsed: elapsed,
+            isPlaying: playing
+        )
+    }
+
+    /// The cover from `FUNNOTCH_FILM_COVER`, loaded once.
+    private static let filmCover: NSImage? = ProcessInfo.processInfo.environment["FUNNOTCH_FILM_COVER"]
+        .flatMap { NSImage(contentsOfFile: $0) }
+
+    /// Per-frame bar levels from `FUNNOTCH_FILM_SPECTRUM`, measured from the
+    /// soundtrack: `{"shots": {"music-peek": [[b0, b1, b2, b3], …]}}`, one
+    /// entry per frame of each shot that shows the bars.
+    private static func loadSpectrum() -> [String: [[Double]]] {
+        guard let path = ProcessInfo.processInfo.environment["FUNNOTCH_FILM_SPECTRUM"],
+              let data = FileManager.default.contents(atPath: path),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let shots = object["shots"] as? [String: [[Double]]]
+        else { return [:] }
+        return shots
     }
 
     /// The site's own wallpaper, as a photo to drop on the shelf.

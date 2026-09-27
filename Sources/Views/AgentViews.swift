@@ -31,6 +31,11 @@ enum Motion {
     /// The wall-clock time the film pretends it is, advancing with the shot.
     nonisolated(unsafe) static var filmDate: Date?
 
+    /// Set by the film renderer: the soundtrack's level in each of the
+    /// spectrum's bars for this frame, 0...1, so the bars in the video move
+    /// to the music playing under it.
+    nonisolated(unsafe) static var filmSpectrum: [Double]?
+
     static func clamp(_ x: Double) -> Double { min(max(x, 0), 1) }
 
     /// 0 → 1 over `duration`, starting after `delay`.

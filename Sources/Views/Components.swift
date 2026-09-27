@@ -41,6 +41,9 @@ struct MusicVisualizer: View {
 
     private func barHeight(index: Int, time: Double, maximum: CGFloat) -> CGFloat {
         guard isPlaying else { return max(maximum * 0.18, 2) }
+        if let levels = Motion.filmSpectrum, index < levels.count {
+            return max(maximum * (0.2 + 0.8 * CGFloat(levels[index])), 2)
+        }
         let wave = sin(time * rates[index] + phases[index])
         let secondary = sin(time * rates[index] * 0.53 + phases[index] * 1.7)
         let normalised = (wave * 0.6 + secondary * 0.4 + 1) / 2

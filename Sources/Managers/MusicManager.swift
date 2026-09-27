@@ -166,6 +166,14 @@ final class MusicManager: ObservableObject {
         updateColors(from: info.artwork)
     }
 
+    /// Moves an injected track's playhead and play state without re-reading
+    /// its artwork, for the film renderer's frame-by-frame playback.
+    func injectPreviewPlayback(elapsed: TimeInterval, isPlaying: Bool) {
+        track.elapsed = elapsed
+        track.isPlaying = isPlaying
+        displayedElapsed = elapsed
+    }
+
     /// Clears the injected track so a snapshot can show the idle home screen,
     /// which is where the weather lives.
     func clearPreviewTrack() {
