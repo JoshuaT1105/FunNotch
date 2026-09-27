@@ -145,8 +145,11 @@ struct ClosedNotchView: View {
     private var resting: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
+                // Each side keeps the width it asked for, pushed up against the
+                // camera; the wings are equal, so any spare goes on the outside.
                 leadingActivity
                     .frame(width: insets.leading, height: viewModel.closedNotchSize.height)
+                    .frame(width: viewModel.closedWingWidth, alignment: .trailing)
 
                 // Dead space behind the physical camera housing.
                 Color.clear
@@ -161,6 +164,7 @@ struct ClosedNotchView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .frame(width: insets.trailing, height: viewModel.closedNotchSize.height)
+                .frame(width: viewModel.closedWingWidth, alignment: .leading)
             }
 
             if viewModel.isShowingDropZone {

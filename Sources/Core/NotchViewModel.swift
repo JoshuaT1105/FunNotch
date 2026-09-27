@@ -392,6 +392,20 @@ final class NotchViewModel: ObservableObject {
         return (leading, trailing)
     }
 
+    /// Width of each wing of the collapsed notch. The notch is drawn centred
+    /// on the camera, so both wings take the wider side's width, and the
+    /// narrower side's content sits against the camera with black beyond it.
+    ///
+    /// The two sides used to be added together instead. Whenever they differed,
+    /// the gap left for the camera landed off-centre by half the difference,
+    /// and whatever sat against the camera on the wider side ended up under
+    /// it. Beside a clock and a battery, the working-agent light was hidden
+    /// that way.
+    var closedWingWidth: CGFloat {
+        let insets = closedActivityInsets
+        return max(insets.leading, insets.trailing)
+    }
+
     private static func estimatedWidth(of widgets: [NotchWidget]) -> CGFloat {
         widgets.reduce(0) { $0 + $1.estimatedWidth } + CGFloat(max(widgets.count - 1, 0)) * 12
     }
@@ -427,8 +441,7 @@ final class NotchViewModel: ObservableObject {
                 return size
             }
 
-            let insets = closedActivityInsets
-            size.width += insets.leading + insets.trailing
+            size.width += closedWingWidth * 2
             return size
 
         case .open:

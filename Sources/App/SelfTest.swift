@@ -447,6 +447,13 @@ enum SelfTest {
             "a side set to Nothing takes no room",
             widgetModel.closedActivityInsets.trailing == 0
         )
+        // Half the clock used to sit under the camera here.
+        check(
+            "and the other side's widgets still clear the camera",
+            abs(widgetModel.contentSize.width - widgetModel.closedNotchSize.width
+                - 2 * widgetModel.closedActivityInsets.leading) < 0.5,
+            detail: "notch \(Int(widgetModel.contentSize.width))"
+        )
         settings.idleRightWidgets = [.battery]
 
         // Who gets the row while music plays is the user's call.
@@ -740,6 +747,17 @@ enum SelfTest {
         settings.idleLeftWidgets = [.clock]
         settings.idleRightWidgets = [.battery]
         check("beside widgets it shrinks to a small light", stage.agentPresentation == .pip)
+        // The light goes on the right only, so the sides differ. The notch is
+        // drawn centred on the camera, so the wings must stay equal; when they
+        // were added together instead, the gap for the camera slid left and the
+        // light went under the camera housing.
+        let lightInsets = stage.closedActivityInsets
+        check(
+            "and the camera stays in the middle, so the light is not under it",
+            abs(stage.contentSize.width - stage.closedNotchSize.width
+                - 2 * max(lightInsets.leading, lightInsets.trailing)) < 0.5,
+            detail: "sides \(Int(lightInsets.leading)) | \(Int(lightInsets.trailing)), notch \(Int(stage.contentSize.width))"
+        )
         let withLight = stage.closedActivityInsets.trailing
         stage.setPreviewAgentActivity(AgentActivity())
         check(
