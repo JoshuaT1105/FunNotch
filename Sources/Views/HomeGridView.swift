@@ -86,7 +86,7 @@ struct HomeTileView: View {
         case .notes:
             NotesView()
         case .timer:
-            TimerView()
+            FocusView(isTile: true)
         default:
             HomePanelChrome {
                 HomeStripPanel(tile: tile)

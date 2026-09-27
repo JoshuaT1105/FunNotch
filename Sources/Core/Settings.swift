@@ -764,6 +764,33 @@ final class Settings: ObservableObject {
         set { write("focusMinutesTotal", newValue) }
     }
 
+    /// Seconds focused on each day, keyed "yyyy-MM-dd", for the week chart and
+    /// the streak. Trimmed to the last few weeks as it is written.
+    var focusDailySeconds: [String: Int] {
+        get { store.dictionary(forKey: "focusDailySeconds") as? [String: Int] ?? [:] }
+        set { write("focusDailySeconds", newValue) }
+    }
+
+    /// Work stretches finished on each day, keyed like `focusDailySeconds`.
+    var focusDailySessions: [String: Int] {
+        get { store.dictionary(forKey: "focusDailySessions") as? [String: Int] ?? [:] }
+        set { write("focusDailySessions", newValue) }
+    }
+
+    // MARK: - Timer
+
+    /// The length the timer dial comes up set to: whatever ran last.
+    var timerLastDuration: TimeInterval {
+        get { store.object(forKey: "timerLastDuration") as? Double ?? 300 }
+        set { write("timerLastDuration", newValue) }
+    }
+
+    /// Lengths run recently, newest first, offered for a one-click restart.
+    var timerRecentDurations: [TimeInterval] {
+        get { store.array(forKey: "timerRecentDurations") as? [Double] ?? [] }
+        set { write("timerRecentDurations", newValue) }
+    }
+
     static let defaultBlocklist = [
         "youtube.com",
         "x.com",
@@ -841,12 +868,6 @@ final class Settings: ObservableObject {
         set { write("showWeatherWhenIdle", newValue) }
     }
 
-    /// The Timer tab: countdowns and a stopwatch.
-    var showTimer: Bool {
-        get { bool("showTimer", true) }
-        set { write("showTimer", newValue) }
-    }
-
     /// The Notes scratchpad tab. On by default: it is the single most
     /// requested notch feature and it costs one tab.
     var showNotes: Bool {
@@ -859,7 +880,7 @@ final class Settings: ObservableObject {
         set { write("gameHighScore", newValue) }
     }
 
-    /// Notch Breakout's blips. On, but quiet, and muted from the game's header.
+    /// The games' sound effects. On, but quiet, and muted from the game's header.
     var gameSoundEnabled: Bool {
         get { bool("gameSoundEnabled", true) }
         set { write("gameSoundEnabled", newValue) }
@@ -869,6 +890,29 @@ final class Settings: ObservableObject {
     var gameBestLevel: Int {
         get { integer("gameBestLevel", 1) }
         set { write("gameBestLevel", newValue) }
+    }
+
+    /// Which of the two games the Game tab opens on: whichever was played last.
+    var selectedGame: String {
+        get { string("selectedGame", "breakout") }
+        set { write("selectedGame", newValue) }
+    }
+
+    var dinoHighScore: Int {
+        get { integer("dinoHighScore", 0) }
+        set { write("dinoHighScore", newValue) }
+    }
+
+    /// Gems picked up across every run, ever.
+    var dinoGemsTotal: Int {
+        get { integer("dinoGemsTotal", 0) }
+        set { write("dinoGemsTotal", newValue) }
+    }
+
+    /// The dinosaur's colours, unlocked by beating scores.
+    var dinoSkin: Int {
+        get { integer("dinoSkin", 0) }
+        set { write("dinoSkin", newValue) }
     }
 
     // MARK: - Agents
@@ -936,5 +980,7 @@ final class Settings: ObservableObject {
         "menubarGlyph", "menubarReadout", "menubarReadoutLength",
         "hudEnabled", "hudShowsVolume", "hudShowsBrightness", "hudShowsBacklight",
         "agentActivityEnabled", "agentAnnounceStart", "agentAnnounceFinish", "agentAnnounceWaiting",
+        "focusDailySeconds", "focusDailySessions", "timerLastDuration", "timerRecentDurations",
+        "selectedGame", "dinoHighScore", "dinoGemsTotal", "dinoSkin",
     ]
 }

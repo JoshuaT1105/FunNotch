@@ -102,7 +102,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             return "\(Int(battery.level * 100))%"
         case .focusTimer:
             let focus = FocusManager.shared
-            return focus.isActive ? focus.compactRemainingText : ""
+            if focus.isActive { return focus.compactRemainingText }
+            let timer = TimerManager.shared
+            return timer.isCountdownRunning ? TimerManager.clock(timer.remaining) : ""
         case .nextEvent:
             guard let event = CalendarManager.shared.nextItem else { return "" }
             return truncated(event.title, to: settings.menubarReadoutLength)

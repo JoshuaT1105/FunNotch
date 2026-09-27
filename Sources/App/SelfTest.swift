@@ -297,6 +297,39 @@ enum SelfTest {
         check("a focus session stops", !FocusManager.shared.isActive)
         Settings.shared.focusBlockWebsites = savedBlocking
 
+        // MARK: Focus history and the timer
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        func dayKey(_ back: Int) -> String {
+            FocusManager.dayKey(calendar.date(byAdding: .day, value: -back, to: today) ?? today)
+        }
+        let week = FocusManager.week(in: [dayKey(0): 600, dayKey(6): 60], endingOn: Date())
+        check("the week chart is seven days ending today",
+              week.count == 7 && week.last?.seconds == 600 && week.first?.seconds == 60)
+        check("a streak runs to yesterday until today has some focus",
+              FocusManager.streak(in: [dayKey(1): 1500, dayKey(2): 900, dayKey(4): 900], asOf: Date()) == 2)
+        check("today's focus adds to the streak",
+              FocusManager.streak(in: [dayKey(0): 300, dayKey(1): 1500, dayKey(2): 900], asOf: Date()) == 3)
+        check("lengths read naturally",
+              TimerManager.shortLength(90) == "1:30" && TimerManager.shortLength(300) == "5 min"
+                && TimerManager.shortLength(5400) == "1 h 30",
+              detail: [90.0, 300, 5400].map(TimerManager.shortLength).joined(separator: ", "))
+
+        let timer = TimerManager.shared
+        // Keeps the test's timers out of the real recent list.
+        timer.previewRecent = []
+        timer.start(seconds: 120)
+        timer.startStopwatch()
+        check("the timer and the stopwatch run side by side",
+              timer.isCountdownRunning && timer.isStopwatchRunning)
+        timer.pauseCountdown()
+        check("pausing the timer leaves the stopwatch running",
+              !timer.isCountdownRunning && timer.isStopwatchRunning && timer.remaining > 100)
+        timer.addTime(60)
+        check("a paused timer can be given more time", timer.remaining > 160)
+        timer.clearPreview()
+        check("both reset cleanly", !timer.isActive)
+
         // MARK: Home layout
         //
         // The layout lives in preferences as encoded strings. A round trip that
@@ -985,6 +1018,110 @@ enum SelfTest {
 
         Settings.shared.gameBestLevel = savedBestLevel
         Settings.shared.gameHighScore = savedHighScore
+
+        // MARK: Dino Run
+        // Every check runs in preview mode, so nothing is written to the real
+        // high score or gem count.
+        let dino = DinoGame.shared
+        let dinoBoard = CGSize(width: 646, height: 132)
+
+        func runDino(seconds: Double, autopilot: Bool) {
+            for _ in 0 ..< Int(seconds * 60) {
+                if autopilot { dino.autopilot() }
+                dino.stepForTesting(frames: 1)
+            }
+        }
+
+        // A tap and a held press, from standing, and how high each goes.
+        func peak(holding seconds: Double) -> CGFloat {
+            dino.startForTesting(size: dinoBoard)
+            dino.press()
+            var top: CGFloat = 0
+            var held = 0.0
+            for _ in 0 ..< 90 {
+                if held >= seconds, dino.isHolding { dino.release() }
+                held += 1.0 / 60
+                dino.stepForTesting(frames: 1)
+                top = max(top, dino.height)
+            }
+            return top
+        }
+        let tap = peak(holding: 0.03)
+        let held = peak(holding: 0.4)
+        check("holding the jump goes higher than a tap", held > tap + 20,
+              detail: "tap \(Int(tap)) pt, held \(Int(held)) pt")
+        check("a full jump stays on the board", held + 34 < dinoBoard.height - DinoGame.groundDepth,
+              detail: "\(Int(held + 34)) of \(Int(dinoBoard.height - DinoGame.groundDepth)) pt")
+
+        // Every kind of obstacle, one after another, against a player who
+        // jumps the ground ones, ducks the middle birds and runs under the
+        // high ones. If any of them cannot be cleared, the game is unfair.
+        dino.startForTesting(size: dinoBoard)
+        let course: [(DinoGame.ObstacleKind, Int, Bool)] = [
+            (.cactus, 0, false), (.cactus, 0, true), (.rock, 0, false), (.bird, 0, false),
+            (.bird, 1, false), (.bird, 2, false), (.tumbleweed, 0, false),
+        ]
+        for (index, entry) in course.enumerated() {
+            dino.placeForTesting(entry.0, at: 300 + CGFloat(index) * 260, level: entry.1, tall: entry.2)
+        }
+        runDino(seconds: 9, autopilot: true)
+        check("every obstacle can be cleared", dino.phase == .running,
+              detail: dino.phase == .running ? "score \(dino.score)" : dino.lastCrash)
+
+        // Standing still into a cactus ends the run.
+        dino.startForTesting(size: dinoBoard)
+        dino.placeForTesting(.cactus, at: 200)
+        runDino(seconds: 2, autopilot: false)
+        check("running into a cactus ends the run", dino.phase == .crashed || dino.phase == .over)
+
+        // The highest pterodactyls can be run under without doing anything.
+        dino.startForTesting(size: dinoBoard)
+        dino.placeForTesting(.bird, at: 200, level: 2)
+        runDino(seconds: 2, autopilot: false)
+        check("a high pterodactyl can be run under", dino.phase == .running)
+
+        // The shield takes one hit, then it is gone.
+        dino.startForTesting(size: dinoBoard)
+        dino.grantForTesting(.shield)
+        dino.placeForTesting(.cactus, at: 200)
+        runDino(seconds: 2, autopilot: false)
+        check("the shield saves one hit", dino.phase == .running && !dino.hasShield)
+
+        // Turbo smashes through.
+        dino.startForTesting(size: dinoBoard)
+        dino.grantForTesting(.turbo)
+        dino.placeForTesting(.rock, at: 200)
+        runDino(seconds: 1.5, autopilot: false)
+        check("turbo smashes through obstacles", dino.phase == .running)
+
+        // Gems in the way are picked up.
+        dino.startForTesting(size: dinoBoard)
+        dino.placeGemForTesting(x: DinoGame.dinoX + 120, altitude: 14)
+        runDino(seconds: 1, autopilot: false)
+        check("running through a gem collects it", dino.gemsThisRun == 1)
+
+        // The run speeds up, and the day turns to night.
+        dino.startForTesting(size: dinoBoard)
+        let startSpeed = dino.speed
+        runDino(seconds: 40, autopilot: false)
+        check("the run gets faster", dino.speed > startSpeed + 60,
+              detail: "\(Int(startSpeed)) → \(Int(dino.speed)) pt/s")
+        dino.setScoreForTesting(0)
+        let morning = dino.nightness
+        dino.setScoreForTesting(950)
+        let night = dino.nightness
+        check("day turns to night as the score climbs", morning < 0.05 && night > 0.9,
+              detail: "\(morning) → \(night)")
+        dino.releaseForTesting()
+
+        let effects: [GameSound.Effect] = [
+            .paddle, .brick(1), .brick(9), .boom, .coin, .levelClear, .highScore,
+            .jump, .doubleJump, .land, .gem(0), .gem(8), .closeCall, .milestone, .shieldPop, .crash, .smash, .turbo,
+        ]
+        let loudest = effects.map { GameSound.shared.peak(of: $0) }.max() ?? 0
+        check("every sound synthesises without clipping",
+              effects.allSatisfy { GameSound.shared.frames(of: $0) > 0 } && loudest < 1,
+              detail: String(format: "peak %.2f", loudest))
 
         // MARK: Drag-to-notch drop zone
         // Clear anything the focus checks left on screen so the sizes compare cleanly.

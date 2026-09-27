@@ -2,42 +2,107 @@
 //  GameView.swift
 //  FunNotch
 //
-//  Notch Breakout, drawn. The rules live in BreakoutGame; this is the board,
-//  the header above it, and the arcade look: everything on a two-point pixel
-//  grid, scanlines over the top, and one monospaced font.
+//  The Game tab: two games behind a switcher — Notch Breakout and Dino Run —
+//  each with its own header of lives, power-ups and score over the board.
+//  The rules live in BreakoutGame and DinoGame, the drawing in BreakoutBoard
+//  and DinoBoard; this is the frame round them and the input.
+//
+//  Input comes two ways. The mouse always works: the paddle follows the
+//  pointer, and a press on the board jumps or launches. The keyboard works
+//  once the board has been clicked, which makes the notch panel key without
+//  activating the app — so Space, ↑ and ↓ reach the game and nothing else.
+//  The keyboard is handed back to whatever had it when the game goes away.
 //
 
 import AppKit
 import SwiftUI
 
+enum GameChoice: String, CaseIterable, Identifiable {
+    case breakout
+    case dino
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .breakout: return "Breakout"
+        case .dino: return "Dino Run"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .breakout: return "square.grid.3x2.fill"
+        case .dino: return "lizard.fill"
+        }
+    }
+}
+
 struct GameView: View {
     @EnvironmentObject private var settings: Settings
+    @State private var isPressing = false
 
-    private let game = BreakoutGame.shared
+    private var choice: GameChoice {
+        GameChoice(rawValue: settings.selectedGame) ?? .breakout
+    }
 
     var body: some View {
         // Driven by the display link rather than a Timer: it runs at the screen
         // refresh rate and stops on its own when the notch closes.
         TimelineView(.animation) { timeline in
-            VStack(spacing: 5) {
+            VStack(spacing: 6) {
                 header
                 board(now: timeline.date)
             }
         }
-        .padding(.top, 4)
-        .onAppear {
-            game.resumeAfterOpen()
-            GameSound.shared.start()
-            MouseTracker.shared.addMoveObserver("breakout") { point in
-                BreakoutGame.shared.pointerMoved(to: point)
-            }
-            DiagnosticLog.write("game", "board shown, paused=\(game.isPaused) level=\(game.level)")
+        .padding(.top, 3)
+        .onAppear(perform: appear)
+        .onDisappear(perform: disappear)
+        .onChange(of: settings.selectedGame) { _, _ in
+            switchedGame()
         }
-        .onDisappear {
+    }
+
+    // MARK: Lifecycle
+
+    private func appear() {
+        GameSound.shared.start()
+        BreakoutGame.shared.resumeAfterOpen()
+        DinoGame.shared.resumeAfterOpen()
+        if choice == .breakout { followPointer() }
+        GameKeyboard.shared.install { event in
+            GameKeyboard.route(event, to: GameChoice(rawValue: Settings.shared.selectedGame) ?? .breakout)
+        }
+        DiagnosticLog.write("game", "\(choice.rawValue) shown")
+    }
+
+    private func disappear() {
+        MouseTracker.shared.removeMoveObserver("breakout")
+        BreakoutGame.shared.pauseForClose()
+        DinoGame.shared.pauseForClose()
+        GameSound.shared.stop()
+        GameKeyboard.shared.remove()
+        DiagnosticLog.write("game", "hidden; breakout \(BreakoutGame.shared.score), dino \(DinoGame.shared.score)")
+    }
+
+    private func followPointer() {
+        MouseTracker.shared.addMoveObserver("breakout") { point in
+            BreakoutGame.shared.pointerMoved(to: point)
+        }
+    }
+
+    /// Whichever game is put away is paused, so switching back finds it
+    /// where it was left.
+    private func switchedGame() {
+        switch choice {
+        case .breakout:
+            DinoGame.shared.pauseForClose()
+            BreakoutGame.shared.resumeAfterOpen()
+            followPointer()
+        case .dino:
+            BreakoutGame.shared.pauseForClose()
+            DinoGame.shared.resumeAfterOpen()
             MouseTracker.shared.removeMoveObserver("breakout")
-            game.pauseForClose()
-            GameSound.shared.stop()
-            DiagnosticLog.write("game", "board hidden at score \(game.score)")
         }
     }
 
@@ -45,102 +110,59 @@ struct GameView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            // Monospaced and upper case throughout: the arcade cabinets this
-            // is imitating had one font, and a proportional rounded face beside
-            // a pixel board looks like two different apps.
-            Text("NOTCH BREAKOUT")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(0.5)
-                .foregroundStyle(.white.opacity(0.9))
-
-            Text("L\(game.level)")
-                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.45))
-                .help(game.boardName)
-
-            // Square pips rather than hearts, for the same reason.
-            HStack(spacing: 3) {
-                ForEach(0 ..< max(game.lives, 0), id: \.self) { _ in
-                    Rectangle()
-                        .fill(Color.pink.opacity(0.85))
-                        .frame(width: 5, height: 5)
+            GamePicker(selection: choice) { picked in
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    settings.selectedGame = picked.rawValue
                 }
             }
 
-            effects
-
-            if game.multiplier > 1, game.phase == .running {
-                Text("×\(game.multiplier)")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(BreakoutGame.comboColour(game.multiplier))
-                    .scaleEffect(1 + 0.08 * sin(game.clock * 10))
+            switch choice {
+            case .breakout: BreakoutHUD()
+            case .dino: DinoHUD()
             }
 
             Spacer(minLength: 0)
 
-            Text(String(format: "%06d", game.score))
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-
-            Text("HI \(String(format: "%06d", game.highScore))")
-                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(game.beatHighScore ? BreakoutGame.comboColour(2) : settings.accentColor)
-
-            Button {
-                settings.gameSoundEnabled.toggle()
-                if settings.gameSoundEnabled { GameSound.shared.start() } else { GameSound.shared.stop() }
-            } label: {
-                Image(systemName: settings.gameSoundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(settings.gameSoundEnabled ? 0.7 : 0.4))
-                    .frame(width: 16, height: 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(settings.gameSoundEnabled ? "Mute" : "Sound on")
-        }
-        .padding(.horizontal, 2)
-    }
-
-    /// A small square for each power-up running, draining as it runs out.
-    private var effects: some View {
-        let running: [(BreakoutGame.PowerupKind, Double)] = [
-            (.wide, game.wideTimeLeft / 12),
-            (.shrink, game.shrinkTimeLeft / 9),
-            (.slow, game.slowTimeLeft / 9),
-            (.fireball, game.fireTimeLeft / 6),
-            (.laser, game.laserTimeLeft / 8),
-            (.shield, game.shieldTimeLeft / 25),
-        ].filter { $0.1 > 0 }
-
-        return HStack(spacing: 4) {
-            ForEach(Array(running.enumerated()), id: \.offset) { _, effect in
-                let (kind, left) = effect
-                VStack(spacing: 1) {
-                    PixelIcon(rows: GameView.icon(for: kind), colour: kind.tint)
-                        .frame(width: 7, height: 5)
-                    Rectangle()
-                        .fill(kind.tint)
-                        .frame(width: max(8 * left, 1), height: 1)
-                        .frame(width: 8, alignment: .leading)
+            switch choice {
+            case .breakout:
+                let game = BreakoutGame.shared
+                ScoreReadout(score: game.score.formatted(), best: game.highScore.formatted(),
+                             beaten: game.beatHighScore, glow: 0)
+            case .dino:
+                let game = DinoGame.shared
+                ScoreReadout(score: String(format: "%05d", game.score), best: String(format: "%05d", game.bestScore),
+                             beaten: game.beatHighScore, glow: game.milestoneGlow)
+                if game.phase == .running || game.isPaused {
+                    HeaderButton(symbol: game.isPaused ? "play.fill" : "pause.fill",
+                                 help: game.isPaused ? "Carry on" : "Pause (P)") {
+                        game.togglePause()
+                    }
                 }
             }
+
+            HeaderButton(symbol: settings.gameSoundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                         help: settings.gameSoundEnabled ? "Mute" : "Sound on",
+                         dimmed: !settings.gameSoundEnabled) {
+                settings.gameSoundEnabled.toggle()
+                if settings.gameSoundEnabled { GameSound.shared.start() } else { GameSound.shared.stop() }
+            }
         }
+        .padding(.horizontal, 2)
+        .frame(height: 22)
     }
 
     // MARK: Board
 
     private func board(now: Date) -> some View {
-        Canvas { context, size in
-            game.advance(to: now, size: size)
-            draw(in: &context, size: size)
+        ZStack {
+            switch choice {
+            case .breakout: BreakoutBoard(now: now)
+            case .dino: DinoBoard(now: now)
+            }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
         .background(
             // The paddle tracks the pointer in screen coordinates, so the board
@@ -150,394 +172,483 @@ struct GameView: View {
             }
         )
         .overlay {
-            if let title = game.overlayTitle {
-                overlay(title: title)
-            }
+            GameOverlayCard(choice: choice)
         }
         .contentShape(Rectangle())
-        .onTapGesture { game.primaryAction() }
+        // A press, not a click: the jump has to happen when the button goes
+        // down, and a held press makes a higher one.
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isPressing else { return }
+                    isPressing = true
+                    GameKeyboard.shared.takeFocus()
+                    switch choice {
+                    case .breakout: BreakoutGame.shared.primaryAction()
+                    case .dino: DinoGame.shared.press()
+                    }
+                }
+                .onEnded { _ in
+                    isPressing = false
+                    if choice == .dino { DinoGame.shared.release() }
+                }
+        )
     }
+}
 
-    private func overlay(title: String) -> some View {
-        let celebrating = game.phase == .over && game.beatHighScore && !game.isPaused
-        return VStack(spacing: 3) {
-            Text(title)
-                .font(.system(size: 14, weight: .heavy, design: .monospaced))
-                .foregroundStyle(celebrating ? BreakoutGame.comboColour(2 + Int(game.clock * 6) % 4) : .white)
-            Text(game.overlaySubtitle)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.6))
-            if game.phase == .over, !game.isPaused {
-                Text("BEST LEVEL \(game.bestLevel) · HI \(game.highScore)")
-                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.4))
+// MARK: - Keyboard
+
+/// Keys for the games. Only ever active while the Game tab is on screen, and
+/// only for events aimed at the notch panel itself.
+@MainActor
+final class GameKeyboard {
+    static let shared = GameKeyboard()
+
+    private var monitor: Any?
+    private var handler: ((NSEvent) -> Bool)?
+    /// Set once a click has made the panel key, so it is handed back after.
+    private var tookFocus = false
+
+    private init() {}
+
+    func install(_ handler: @escaping (NSEvent) -> Bool) {
+        self.handler = handler
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            MainActor.assumeIsolated {
+                guard event.window is NotchPanel, let handler = GameKeyboard.shared.handler else { return event }
+                return handler(event) ? nil : event
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(
-            Rectangle()
-                .fill(Color.black.opacity(0.78))
-                .overlay(Rectangle().strokeBorder(Color.white.opacity(0.18), lineWidth: 2))
-        )
+    }
+
+    func remove() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        handler = nil
+        guard tookFocus else { return }
+        tookFocus = false
+        // After the notch has finished closing, so the panel is not hidden and
+        // shown again in the middle of its animation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            NotchPanel.relinquishKeyFocus()
+        }
+    }
+
+    /// Makes the notch panel under the pointer the key window, so keys reach
+    /// the game. It is a non-activating panel: the app you were in stays the
+    /// active one.
+    func takeFocus() {
+        let point = NSEvent.mouseLocation
+        guard let panel = NSApp.windows
+            .compactMap({ $0 as? NotchPanel })
+            .first(where: { $0.isVisible && $0.frame.contains(point) }),
+            !panel.isKeyWindow
+        else { return }
+        panel.makeKey()
+        tookFocus = true
+    }
+
+    /// Sends a key to the game. Returns true if the game used it.
+    static func route(_ event: NSEvent, to choice: GameChoice) -> Bool {
+        // Leave shortcuts alone.
+        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
+        let down = event.type == .keyDown
+        switch choice {
+        case .dino:
+            let game = DinoGame.shared
+            switch event.keyCode {
+            case 49, 126, 13: // space, up, W
+                if down {
+                    if !event.isARepeat { game.press() }
+                } else {
+                    game.release()
+                }
+                return true
+            case 125, 1: // down, S
+                game.setDucking(down)
+                return true
+            case 35, 53: // P, escape
+                if down, !event.isARepeat { game.togglePause() }
+                return true
+            case 36: // return
+                if down, !event.isARepeat, game.phase != .running {
+                    game.press()
+                    game.release()
+                }
+                return true
+            default:
+                // Swallowed: with nothing to type into, any other key would
+                // only make the panel beep.
+                return true
+            }
+        case .breakout:
+            let game = BreakoutGame.shared
+            switch event.keyCode {
+            case 49, 36: // space, return
+                if down, !event.isARepeat { game.primaryAction() }
+                return true
+            case 35, 53: // P, escape
+                if down, !event.isARepeat, game.phase == .running || game.isPaused { game.primaryAction() }
+                return true
+            default:
+                return true
+            }
+        }
+    }
+}
+
+extension NotchPanel {
+    /// Gives the keyboard back to the app that had it. A panel that has been
+    /// made key keeps the keyboard until something else is clicked, so a
+    /// sentence typed after closing the notch would otherwise vanish into it.
+    /// Ordering it out and straight back in has the window server hand key
+    /// status back to the active app's window.
+    static func relinquishKeyFocus() {
+        for controller in NotchWindowManager.shared.controllers where controller.panel.isKeyWindow {
+            // Only once the notch has closed: if the game was put away for
+            // another tab, that tab may want the keyboard itself.
+            guard controller.viewModel.notchState == .closed else { continue }
+            controller.panel.orderOut(nil)
+            controller.panel.orderFrontRegardless()
+            DiagnosticLog.write("game", "keyboard handed back")
+        }
+    }
+}
+
+// MARK: - Header pieces
+
+private struct GamePicker: View {
+    let selection: GameChoice
+    let choose: (GameChoice) -> Void
+
+    @Namespace private var highlight
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(GameChoice.allCases) { game in
+                let selected = game == selection
+                Button {
+                    choose(game)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: game.symbol)
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(game.title)
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(selected ? .white : .white.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background {
+                        if selected {
+                            Capsule()
+                                .fill(Color.white.opacity(0.15))
+                                .matchedGeometryEffect(id: "game", in: highlight)
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(1.5)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .fixedSize()
+    }
+}
+
+/// A power-up's icon inside a ring that drains as it runs out.
+private struct EffectGauge: View {
+    let symbol: String
+    let tint: Color
+    let fraction: Double
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(tint.opacity(0.2), lineWidth: 1.6)
+            Circle()
+                .trim(from: 0, to: max(min(fraction, 1), 0))
+                .stroke(tint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Image(systemName: symbol)
+                .font(.system(size: 6.5, weight: .bold))
+                .foregroundStyle(tint)
+        }
+        .frame(width: 15, height: 15)
+        .shadow(color: tint.opacity(0.5), radius: 2)
+    }
+}
+
+private struct BreakoutHUD: View {
+    @EnvironmentObject private var settings: Settings
+
+    var body: some View {
+        let game = BreakoutGame.shared
+        HStack(spacing: 7) {
+            Text("Level \(game.level)")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.75))
+                .help(game.boardName)
+
+            HStack(spacing: 3) {
+                ForEach(0 ..< max(game.lives, 0), id: \.self) { _ in
+                    Circle()
+                        .fill(RadialGradient(colors: [.white, settings.accentColor], center: .topLeading,
+                                             startRadius: 0, endRadius: 6))
+                        .frame(width: 6, height: 6)
+                        .shadow(color: settings.accentColor.opacity(0.7), radius: 2)
+                }
+            }
+
+            let running: [(BreakoutGame.PowerupKind, Double)] = [
+                (.wide, game.wideTimeLeft), (.shrink, game.shrinkTimeLeft), (.slow, game.slowTimeLeft),
+                (.fireball, game.fireTimeLeft), (.laser, game.laserTimeLeft), (.shield, game.shieldTimeLeft),
+            ].filter { $0.1 > 0 }
+            ForEach(Array(running.enumerated()), id: \.offset) { _, effect in
+                EffectGauge(symbol: effect.0.symbol, tint: effect.0.tint, fraction: effect.1 / effect.0.duration)
+            }
+
+            if game.multiplier > 1, game.phase == .running {
+                Text("×\(game.multiplier)")
+                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .foregroundStyle(BreakoutGame.comboColour(game.multiplier))
+                    .shadow(color: BreakoutGame.comboColour(game.multiplier).opacity(0.7), radius: 3)
+                    .scaleEffect(1 + 0.08 * sin(game.clock * 10))
+            }
+        }
+    }
+}
+
+private struct DinoHUD: View {
+    var body: some View {
+        let game = DinoGame.shared
+        HStack(spacing: 7) {
+            if game.gemsThisRun > 0 || game.phase == .running {
+                HStack(spacing: 3) {
+                    Image(systemName: "diamond.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.7, green: 1, blue: 1),
+                                                                 Color(red: 0.25, green: 0.6, blue: 1)],
+                                                        startPoint: .top, endPoint: .bottom))
+                    Text("\(game.gemsThisRun)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            if game.hasShield {
+                EffectGauge(symbol: DinoGame.PowerKind.shield.symbol, tint: DinoGame.PowerKind.shield.tint, fraction: 1)
+            }
+            if game.wingsLeft > 0 {
+                EffectGauge(symbol: DinoGame.PowerKind.wings.symbol, tint: DinoGame.PowerKind.wings.tint,
+                            fraction: game.wingsLeft / DinoGame.PowerKind.wings.duration)
+            }
+            if game.magnetLeft > 0 {
+                EffectGauge(symbol: DinoGame.PowerKind.magnet.symbol, tint: DinoGame.PowerKind.magnet.tint,
+                            fraction: game.magnetLeft / DinoGame.PowerKind.magnet.duration)
+            }
+            if game.turboLeft > 0 {
+                EffectGauge(symbol: DinoGame.PowerKind.turbo.symbol, tint: DinoGame.PowerKind.turbo.tint,
+                            fraction: game.turboLeft / DinoGame.PowerKind.turbo.duration)
+            }
+            if game.phase != .running {
+                ColourButton()
+            }
+        }
+    }
+}
+
+/// The dinosaur's colour; click for the next one unlocked.
+private struct ColourButton: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        let game = DinoGame.shared
+        let skin = game.skin
+        Button {
+            game.nextColour()
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(LinearGradient(colors: [skin.top, skin.bottom], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 9, height: 9)
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 0.6))
+                Text(skin.name)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(isHovering ? 0.9 : 0.55))
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 17)
+            .background(Capsule().fill(Color.white.opacity(isHovering ? 0.12 : 0.05)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+        .help(colourHelp(game))
+    }
+
+    @MainActor private func colourHelp(_ game: DinoGame) -> String {
+        var parts = ["Change colour"]
+        if let next = game.nextSkin {
+            parts.append("score \(next.unlockScore.formatted()) to unlock \(next.name)")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct ScoreReadout: View {
+    let score: String
+    let best: String
+    let beaten: Bool
+    /// Lights the score up for a moment, at a milestone.
+    let glow: Double
+
+    @EnvironmentObject private var settings: Settings
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(score)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(glow > 0.01
+                                 ? Color(red: 1, green: 0.85 + 0.15 * (1 - glow), blue: 0.4 + 0.6 * (1 - glow))
+                                 : .white)
+                .scaleEffect(1 + 0.12 * glow, anchor: .trailing)
+                .shadow(color: Color(red: 1, green: 0.8, blue: 0.3).opacity(glow * 0.8), radius: 4)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("BEST")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.35))
+                Text(best)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(beaten ? Color(red: 1, green: 0.8, blue: 0.3) : settings.accentColor)
+            }
+        }
+    }
+}
+
+private struct HeaderButton: View {
+    let symbol: String
+    let help: String
+    var dimmed = false
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(dimmed ? 0.4 : (isHovering ? 0.95 : 0.7)))
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.white.opacity(isHovering ? 0.12 : 0)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+        .help(help)
+    }
+}
+
+// MARK: - Overlay
+
+/// Title, paused and game-over cards, over the middle of the board.
+private struct GameOverlayCard: View {
+    let choice: GameChoice
+
+    @EnvironmentObject private var settings: Settings
+
+    private struct Content {
+        let title: String
+        let subtitle: String
+        let detail: String?
+        let celebrate: Bool
+    }
+
+    var body: some View {
+        Group {
+            if let content {
+                VStack(spacing: 3) {
+                    Text(content.title)
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .foregroundStyle(content.celebrate
+                                         ? AnyShapeStyle(LinearGradient(colors: [Color(red: 1, green: 0.85, blue: 0.35),
+                                                                                 Color(red: 1, green: 0.45, blue: 0.55)],
+                                                                        startPoint: .leading, endPoint: .trailing))
+                                         : AnyShapeStyle(Color.white))
+                    Text(content.subtitle)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.72))
+                    if let detail = content.detail {
+                        Text(detail)
+                            .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.top, 1)
+                    }
+                }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.black.opacity(0.55))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: content?.title)
         .allowsHitTesting(false)
     }
 
-    /// One "pixel" of the game's grid. Everything is snapped to it, so nothing
-    /// ever lands on a half pixel and the whole board reads as one resolution
-    /// rather than smooth shapes drawn small.
-    private static let px: CGFloat = 2
-
-    private func snap(_ rect: CGRect) -> CGRect {
-        let p = Self.px
-        let x = (rect.minX / p).rounded(.down) * p
-        let y = (rect.minY / p).rounded(.down) * p
-        return CGRect(
-            x: x, y: y,
-            width: max((rect.width / p).rounded() * p, p),
-            height: max((rect.height / p).rounded() * p, p)
-        )
-    }
-
-    private func fill(_ context: inout GraphicsContext, _ rect: CGRect, _ colour: Color, _ opacity: Double = 1) {
-        context.fill(Path(snap(rect)), with: .color(colour.opacity(opacity)))
-    }
-
-    private func draw(in context: inout GraphicsContext, size: CGSize) {
-        let p = Self.px
-
-        // Shake the board, not the header: whole pixels only.
-        if game.shake > 0.1 {
-            let dx = (sin(game.clock * 97) * game.shake / p).rounded() * p
-            let dy = (cos(game.clock * 83) * game.shake / p).rounded() * p
-            context.translateBy(x: dx, y: dy)
-        }
-
-        drawStars(&context, size: size)
-        if game.shieldTimeLeft > 0 { drawShield(&context, size: size) }
-        for brick in game.bricks { drawBrick(&context, brick) }
-        if game.phase == .serving || game.phase == .intro { drawAim(&context) }
-        drawLasers(&context)
-
-        for particle in game.particles {
-            let s = max(particle.size, p)
-            fill(&context,
-                 CGRect(x: particle.position.x - s / 2, y: particle.position.y - s / 2, width: s, height: s),
-                 particle.color, min(particle.life / particle.maxLife * 1.6, 1))
-        }
-
-        for powerup in game.powerups { drawPowerup(&context, powerup) }
-        drawPaddle(&context)
-        for ball in game.balls { drawBall(&context, ball) }
-
-        for popup in game.popups {
-            context.draw(
-                Text(popup.text)
-                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
-                    .foregroundColor(popup.color.opacity(min(popup.life / popup.maxLife * 1.8, 1))),
-                at: CGPoint(x: (popup.position.x / p).rounded() * p, y: (popup.position.y / p).rounded() * p)
+    private var content: Content? {
+        switch choice {
+        case .breakout:
+            let game = BreakoutGame.shared
+            guard let title = game.overlayTitle else { return nil }
+            let over = game.phase == .over && !game.isPaused
+            return Content(
+                title: title,
+                subtitle: game.overlaySubtitle,
+                detail: over ? "Best level \(game.bestLevel) · best score \(game.highScore.formatted())" : nil,
+                celebrate: over && game.beatHighScore
             )
-        }
-
-        // Scanlines over the whole board. One dark row every other pixel, dim
-        // enough to be felt rather than seen.
-        var line: CGFloat = 0
-        while line < size.height {
-            context.fill(
-                Path(CGRect(x: 0, y: line, width: size.width, height: 1)),
-                with: .color(.black.opacity(0.09))
+        case .dino:
+            let game = DinoGame.shared
+            guard let title = game.overlayTitle else { return nil }
+            var detail: String?
+            if !game.isPaused, game.phase == .ready || game.phase == .over {
+                var parts: [String] = []
+                if game.bestScore > 0 { parts.append("Best \(game.bestScore.formatted())") }
+                if settings.dinoGemsTotal > 0 { parts.append("\(settings.dinoGemsTotal.formatted()) gems in all") }
+                if let next = game.nextSkin { parts.append("\(next.name) colour at \(next.unlockScore.formatted())") }
+                detail = parts.isEmpty ? nil : parts.joined(separator: " · ")
+            }
+            let over = game.phase == .over && !game.isPaused
+            return Content(
+                title: title,
+                subtitle: game.overlaySubtitle,
+                detail: detail,
+                celebrate: (over && (game.beatHighScore || game.unlockedSkin != nil)) || (game.phase == .ready && !game.isPaused)
             )
-            line += p * 2
-        }
-
-        if let banner = game.banner {
-            let centre = CGPoint(x: size.width / 2, y: size.height * 0.62)
-            let width = max(116, CGFloat(banner.count) * 6.4 + 28)
-            let plate = CGRect(x: centre.x - width / 2, y: centre.y - 9, width: width, height: 18)
-            fill(&context, plate, .black, 0.75)
-            fill(&context, CGRect(x: plate.minX, y: plate.minY, width: plate.width, height: p), .white, 0.22)
-            fill(&context, CGRect(x: plate.minX, y: plate.maxY - p, width: plate.width, height: p), .white, 0.22)
-            let tint: Color = banner.hasPrefix("COMBO") ? BreakoutGame.comboColour(game.multiplier)
-                : banner.hasPrefix("NEW HIGH") ? BreakoutGame.comboColour(2 + Int(game.clock * 6) % 4)
-                : .white.opacity(0.92)
-            context.draw(
-                Text(banner)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(tint),
-                at: centre
-            )
-        }
-    }
-
-    // MARK: Pieces
-
-    /// A slow fall of dim stars behind the bricks.
-    private func drawStars(_ context: inout GraphicsContext, size: CGSize) {
-        for index in 0 ..< 34 {
-            let seed = Double(index)
-            let x = (seed * 97.31).truncatingRemainder(dividingBy: 1) * size.width
-            let speed = 3 + (seed * 13.7).truncatingRemainder(dividingBy: 1) * 6
-            let y = ((seed * 57.1).truncatingRemainder(dividingBy: 1) * size.height + game.clock * speed)
-                .truncatingRemainder(dividingBy: size.height)
-            let twinkle = (sin(game.clock * (1 + (seed * 3.3).truncatingRemainder(dividingBy: 2)) + seed) + 1) / 2
-            fill(&context, CGRect(x: x, y: y, width: Self.px, height: Self.px), .white, 0.06 + 0.16 * twinkle)
-        }
-    }
-
-    private func drawBrick(_ context: inout GraphicsContext, _ brick: BreakoutGame.Brick) {
-        let p = Self.px
-        // Dropping in: hidden until its turn, then a short fall into place.
-        guard brick.landing < BreakoutGame.dropDuration else { return }
-        let fall = brick.landing / BreakoutGame.dropDuration
-        var frame = brick.frame
-        frame.origin.y -= BreakoutGame.dropHeight * CGFloat(fall * fall)
-        let box = snap(frame)
-        let settle = 1 - fall * 0.6
-        let colour = game.colour(of: brick)
-
-        switch brick.kind {
-        case .steel:
-            fill(&context, box, Color(white: 0.42), settle)
-            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), Color(white: 0.85), 0.8 * settle)
-            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), .black, 0.4 * settle)
-            // Rivets.
-            fill(&context, CGRect(x: box.minX + p * 2, y: box.midY - p / 2, width: p, height: p), Color(white: 0.8), settle)
-            fill(&context, CGRect(x: box.maxX - p * 3, y: box.midY - p / 2, width: p, height: p), Color(white: 0.8), settle)
-            // Now and then a glint slides along the metal.
-            let glint = (game.clock * 0.35 + Double(brick.column) * 0.04).truncatingRemainder(dividingBy: 1.8)
-            if glint < 1 {
-                let x = box.minX + CGFloat(glint) * box.width
-                fill(&context, CGRect(x: x, y: box.minY + p, width: p, height: box.height - p * 2), .white, 0.35 * settle)
-            }
-
-        case .explosive:
-            let pulse = 0.78 + 0.22 * sin(game.clock * 7 + Double(brick.column))
-            fill(&context, box, colour, pulse * settle)
-            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), .white, 0.3 * settle)
-            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), .black, 0.35 * settle)
-            // A bomb in the middle with its fuse fizzing: stripes read as
-            // decoration, a bomb reads as a bomb.
-            let body = CGRect(x: box.midX - p * 2, y: box.midY - p, width: p * 4, height: p * 2)
-            fill(&context, body, .black, 0.92 * settle)
-            fill(&context, CGRect(x: body.minX + p, y: body.minY, width: p, height: p), .white, 0.35 * settle)
-            let spark = Int(game.clock * 12 + Double(brick.column)) % 2 == 0
-                ? Color(red: 1, green: 0.95, blue: 0.5) : Color(red: 1, green: 0.55, blue: 0.1)
-            fill(&context, CGRect(x: body.maxX, y: body.minY - p, width: p, height: p), spark, settle)
-
-        case .gold:
-            fill(&context, box, colour, settle)
-            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), Color(red: 1, green: 0.97, blue: 0.75), settle)
-            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), Color(red: 0.6, green: 0.4, blue: 0), 0.8 * settle)
-            // A shine that sweeps across, each brick a beat after the last.
-            let sweep = (game.clock * 0.6 + Double(brick.column) * 0.07).truncatingRemainder(dividingBy: 1.4)
-            if sweep < 1 {
-                let x = box.minX + CGFloat(sweep) * (box.width + box.height) - box.height
-                for step in 0 ..< Int(box.height / p) {
-                    let sx = x + CGFloat(step) * p
-                    guard sx >= box.minX, sx < box.maxX - p else { continue }
-                    fill(&context, CGRect(x: sx, y: box.maxY - CGFloat(step + 1) * p, width: p * 2, height: p), .white, 0.55 * settle)
-                }
-            }
-
-        case .mystery:
-            let hue = 0.75 + 0.06 * sin(game.clock * 3 + Double(brick.column))
-            fill(&context, box, Color(hue: hue, saturation: 0.62, brightness: 0.95), settle)
-            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), .white, 0.35 * settle)
-            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), .black, 0.3 * settle)
-            context.draw(
-                Text("?")
-                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
-                    .foregroundColor(.white.opacity((0.75 + 0.25 * sin(game.clock * 5)) * settle)),
-                at: CGPoint(x: box.midX, y: box.midY)
-            )
-
-        case .normal:
-            let tough = brick.maxHitPoints > 1
-            // Flat body, a lit top edge and a shaded bottom edge. That two-tone
-            // bevel is what makes a rectangle read as a block rather than a
-            // coloured smear.
-            fill(&context, box, colour, (tough ? 1 : 0.85) * settle)
-            fill(&context, CGRect(x: box.minX, y: box.minY, width: box.width, height: p), .white, 0.30 * settle)
-            fill(&context, CGRect(x: box.minX, y: box.maxY - p, width: box.width, height: p), .black, (tough ? 0.45 : 0.30) * settle)
-            if tough {
-                // Armour is studs, one per hit left: legible at this size, and
-                // unmistakably pixel art.
-                let studs = min(brick.hitPoints, 4)
-                let spacing = p * 3
-                let start = box.midX - CGFloat(studs - 1) * spacing / 2 - p / 2
-                for stud in 0 ..< studs {
-                    fill(&context, CGRect(x: start + CGFloat(stud) * spacing, y: box.midY - p / 2, width: p, height: p), .white, 0.75 * settle)
-                }
-            }
-            if brick.hitPoints < brick.maxHitPoints {
-                // Cracks spread as it takes damage.
-                let damage = brick.maxHitPoints - brick.hitPoints
-                for step in 0 ..< min(damage * 3, 7) {
-                    let cx = box.minX + p * CGFloat(3 + step * 2)
-                    let cy = box.minY + p * (step % 2 == 0 ? 1 : 2)
-                    guard cx < box.maxX - p else { break }
-                    fill(&context, CGRect(x: cx, y: cy, width: p, height: p), .black, 0.55 * settle)
-                }
-            }
-        }
-
-        if brick.flash > 0 {
-            fill(&context, box, .white, brick.flash / 0.1 * 0.7)
-        }
-    }
-
-    /// Where the serve will go: a line of dots marching away from the ball.
-    private func drawAim(_ context: inout GraphicsContext) {
-        guard let ball = game.balls.first, game.phase == .serving else { return }
-        let direction = CGVector(dx: cos(game.serveAngle), dy: sin(game.serveAngle))
-        let march = CGFloat((game.clock * 24).truncatingRemainder(dividingBy: 9))
-        for dot in 0 ..< 6 {
-            let distance = 10 + CGFloat(dot) * 9 + march
-            let point = CGPoint(x: ball.position.x + direction.dx * distance, y: ball.position.y + direction.dy * distance)
-            fill(&context, CGRect(x: point.x - 1, y: point.y - 1, width: Self.px, height: Self.px),
-                 .white, 0.55 * (1 - Double(dot) / 6))
-        }
-    }
-
-    private func drawLasers(_ context: inout GraphicsContext) {
-        let tint = BreakoutGame.PowerupKind.laser.tint
-        for laser in game.lasers {
-            let x = laser.position.x
-            fill(&context, CGRect(x: x - 2, y: laser.position.y - 5, width: 4, height: 10), tint, 0.3)
-            fill(&context, CGRect(x: x - 1, y: laser.position.y - 4, width: Self.px, height: 8), .white, 0.95)
-        }
-    }
-
-    private func drawShield(_ context: inout GraphicsContext, size: CGSize) {
-        let tint = BreakoutGame.PowerupKind.shield.tint
-        let running = game.shieldTimeLeft
-        // Blinks in its last three seconds, as a warning.
-        guard running > 3 || Int(game.clock * 8) % 2 == 0 else { return }
-        let pulse = 0.55 + 0.25 * sin(game.clock * 6)
-        fill(&context, CGRect(x: 0, y: game.shieldY - 1, width: size.width, height: Self.px), tint, pulse)
-        var x: CGFloat = CGFloat((game.clock * 40).truncatingRemainder(dividingBy: 24))
-        while x < size.width {
-            fill(&context, CGRect(x: x, y: game.shieldY - 1, width: Self.px * 2, height: Self.px), .white, 0.7)
-            x += 24
-        }
-    }
-
-    private func drawPowerup(_ context: inout GraphicsContext, _ powerup: BreakoutGame.Powerup) {
-        let p = Self.px
-        let box = snap(CGRect(x: powerup.position.x - 9, y: powerup.position.y - 5, width: 18, height: 10))
-        // The bad one flashes, so it can be told apart before it is caught.
-        let border = powerup.kind.isBad && Int(powerup.age * 8) % 2 == 0 ? Color.white : powerup.kind.tint
-        fill(&context, box, border, 1)
-        fill(&context, box.insetBy(dx: p, dy: p), .black, 0.7)
-        let icon = GameView.icon(for: powerup.kind)
-        let origin = CGPoint(x: (box.midX - 3.5).rounded(), y: (box.midY - 2.5).rounded())
-        for (row, line) in icon.enumerated() {
-            for (column, character) in line.enumerated() where character == "#" {
-                context.fill(
-                    Path(CGRect(x: origin.x + CGFloat(column), y: origin.y + CGFloat(row), width: 1, height: 1)),
-                    with: .color(powerup.kind.tint)
-                )
-            }
-        }
-    }
-
-    private func drawPaddle(_ context: inout GraphicsContext) {
-        let p = Self.px
-        // A hit squashes the paddle for a moment.
-        let squash = CGFloat(game.paddleSquash)
-        let width = game.paddleWidth * (1 + 0.08 * squash)
-        let height = BreakoutGame.paddleHeight * (1 - 0.3 * squash)
-        let bottom = game.paddleCenterY + BreakoutGame.paddleHeight / 2
-        let rect = snap(CGRect(x: game.paddleCenterX - width / 2, y: bottom - height, width: width, height: height))
-        let colour = game.shrinkTimeLeft > 0 ? BreakoutGame.PowerupKind.shrink.tint : settings.accentColor
-
-        fill(&context, rect, colour, 1)
-        fill(&context, CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: p), .white, 0.45)
-        fill(&context, CGRect(x: rect.maxX - p, y: rect.minY, width: p, height: rect.height), .black, 0.30)
-        fill(&context, CGRect(x: rect.minX, y: rect.maxY - p, width: rect.width, height: p), .black, 0.30)
-
-        if game.laserTimeLeft > 0 {
-            let tint = BreakoutGame.PowerupKind.laser.tint
-            fill(&context, CGRect(x: rect.minX + p, y: rect.minY - p * 2, width: p * 2, height: p * 2), tint, 1)
-            fill(&context, CGRect(x: rect.maxX - p * 3, y: rect.minY - p * 2, width: p * 2, height: p * 2), tint, 1)
-        }
-        if game.wideTimeLeft > 0 {
-            let tint = BreakoutGame.PowerupKind.wide.tint
-            fill(&context, CGRect(x: rect.minX, y: rect.minY, width: p, height: rect.height), tint, 0.9)
-            fill(&context, CGRect(x: rect.maxX - p, y: rect.minY, width: p, height: rect.height), tint, 0.9)
-        }
-    }
-
-    private func drawBall(_ context: inout GraphicsContext, _ ball: BreakoutGame.Ball) {
-        let r = BreakoutGame.ballRadius
-        let burning = game.fireTimeLeft > 0
-        let trailColour: Color = burning ? Color(red: 1, green: 0.5, blue: 0.15) : .white
-        // A fading trail of where it has just been.
-        if game.phase == .running {
-            for (index, point) in ball.trail.enumerated() where index > 0 {
-                let fade = 1 - Double(index) / Double(ball.trail.count + 1)
-                let size = r * 2 * CGFloat(0.4 + 0.6 * fade)
-                fill(&context, CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size),
-                     trailColour, 0.28 * fade)
-            }
-        }
-        // A square ball. An anti-aliased circle four pixels across is a grey
-        // blob; a square is unambiguous and is what the machines this is
-        // imitating actually drew.
-        let box = snap(CGRect(x: ball.position.x - r, y: ball.position.y - r, width: r * 2, height: r * 2))
-        fill(&context, box, burning ? Color(red: 1, green: 0.62, blue: 0.2) : .white, 1)
-        fill(&context, CGRect(x: box.minX, y: box.minY, width: Self.px, height: Self.px),
-             burning ? Color(red: 1, green: 0.95, blue: 0.6) : .white, 1)
-        fill(&context, CGRect(x: box.maxX - Self.px, y: box.maxY - Self.px, width: Self.px, height: Self.px), .black, 0.35)
-    }
-
-    // MARK: Icons
-
-    /// Seven-by-five pixel icons for the power-ups, drawn at one point per
-    /// pixel inside their capsules and in the header.
-    static func icon(for kind: BreakoutGame.PowerupKind) -> [String] {
-        switch kind {
-        case .wide:
-            return [".......", ".#...#.", "#######", ".#...#.", "......."]
-        case .multiball:
-            return [".......", ".##.##.", ".##.##.", ".......", "......."]
-        case .slow:
-            return [".#####.", "..###..", "...#...", "..###..", ".#####."]
-        case .fireball:
-            return ["...#...", "..##...", "..###..", ".#####.", "..###.."]
-        case .laser:
-            return [".#...#.", ".#...#.", ".#...#.", ".......", ".#...#."]
-        case .shield:
-            return [".......", "#.....#", "#######", ".......", "......."]
-        case .shrink:
-            return [".......", "#.....#", ".#####.", "#.....#", "......."]
         }
     }
 }
 
-/// A tiny sprite from rows of `#` and `.`, one point per pixel.
-private struct PixelIcon: View {
-    let rows: [String]
-    let colour: Color
-
-    var body: some View {
-        Canvas { context, _ in
-            for (row, line) in rows.enumerated() {
-                for (column, character) in line.enumerated() where character == "#" {
-                    context.fill(
-                        Path(CGRect(x: CGFloat(column), y: CGFloat(row), width: 1, height: 1)),
-                        with: .color(colour)
-                    )
-                }
-            }
-        }
-    }
-}
+// MARK: - Screen frame
 
 /// Reports its own rectangle in screen coordinates. SwiftUI's hover callbacks
 /// cannot be used for this: the notch panel is never the active app, so the
 /// pointer has to come from the global tracker and be mapped in by hand.
-private struct ScreenFrameReader: NSViewRepresentable {
+struct ScreenFrameReader: NSViewRepresentable {
     let onChange: (CGRect) -> Void
 
     func makeNSView(context: Context) -> NSView {

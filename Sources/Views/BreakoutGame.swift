@@ -18,7 +18,7 @@
 //  On top of the classic game: nine hand-drawn boards that come round harder,
 //  steel, explosive, gold and mystery bricks, seven power-ups (one of them bad),
 //  a combo multiplier for breaking bricks without touching the paddle, and
-//  enough shake, sparks and sound that it feels like a game.
+//  enough shake, sparks, shockwaves and sound that it feels like a game.
 //
 
 import AppKit
@@ -88,13 +88,38 @@ final class BreakoutGame {
 
         var name: String {
             switch self {
-            case .wide: return "WIDE"
-            case .multiball: return "MULTIBALL"
-            case .slow: return "SLOW-MO"
-            case .fireball: return "FIREBALL"
-            case .laser: return "LASERS"
-            case .shield: return "SHIELD"
-            case .shrink: return "SHRUNK!"
+            case .wide: return "Wide"
+            case .multiball: return "Multiball"
+            case .slow: return "Slow-mo"
+            case .fireball: return "Fireball"
+            case .laser: return "Lasers"
+            case .shield: return "Shield"
+            case .shrink: return "Shrunk!"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .wide: return "arrow.left.and.right"
+            case .multiball: return "circle.grid.2x1.fill"
+            case .slow: return "tortoise.fill"
+            case .fireball: return "flame.fill"
+            case .laser: return "bolt.fill"
+            case .shield: return "shield.fill"
+            case .shrink: return "arrow.right.and.line.vertical.and.arrow.left"
+            }
+        }
+
+        /// How long it lasts, for the draining ring in the header.
+        var duration: Double {
+            switch self {
+            case .wide: return 12
+            case .shrink: return 9
+            case .slow: return 9
+            case .fireball: return 6
+            case .laser: return 8
+            case .shield: return 25
+            case .multiball: return 0
             }
         }
 
@@ -108,6 +133,17 @@ final class BreakoutGame {
         var age: Double = 0
     }
 
+    enum ParticleKind {
+        /// A point of light, drawn additively so a crowd of them blooms.
+        case spark
+        /// A tumbling chip of the brick that broke.
+        case shard
+        /// A soft puff that swells as it fades.
+        case smoke
+        /// Paper, flipping as it falls.
+        case confetti
+    }
+
     struct Particle {
         var position: CGPoint
         var velocity: CGVector
@@ -116,6 +152,26 @@ final class BreakoutGame {
         let color: Color
         var size: CGFloat = 2
         var gravity: CGFloat = 260
+        var kind: ParticleKind = .spark
+        var angle: Double = 0
+        var spin: Double = 0
+    }
+
+    /// A ring of light spreading out from an explosion or a catch.
+    struct Ring {
+        let center: CGPoint
+        let maxRadius: CGFloat
+        var life: Double
+        let maxLife: Double
+        let color: Color
+
+        var progress: Double { 1 - life / maxLife }
+    }
+
+    enum BannerTone {
+        case plain
+        case combo
+        case record
     }
 
     struct Laser {
@@ -163,11 +219,17 @@ final class BreakoutGame {
     private(set) var bricks: [Brick] = []
     private(set) var powerups: [Powerup] = []
     private(set) var particles: [Particle] = []
+    private(set) var rings: [Ring] = []
     private(set) var lasers: [Laser] = []
     private(set) var popups: [Popup] = []
     private(set) var paddleCenterX: CGFloat = 0
     private(set) var banner: String?
+    private(set) var bannerTone: BannerTone = .plain
     private(set) var bannerLife: Double = 0
+    /// How long the current banner has been up, for its entrance.
+    private(set) var bannerAge: Double = 0
+    /// A white flash over the whole board, from an explosion. Decays on its own.
+    private(set) var flash: Double = 0
 
     /// Bricks broken since a ball last touched the paddle.
     private(set) var combo = 0
@@ -247,6 +309,17 @@ final class BreakoutGame {
 
     var bestLevel: Int {
         max(Settings.shared.gameBestLevel, level)
+    }
+
+    /// How far through the pause before an automatic serve, 0 to 1.
+    var serveProgress: Double {
+        phase == .serving ? min(max(1 - serveCountdown / 1.6, 0), 1) : 0
+    }
+
+    /// Each board has its own colour, which the background takes on.
+    var levelHue: Double {
+        let hues = [0.6, 0.72, 0.52, 0.82, 0.08, 0.9, 0.45, 0.97, 0.14]
+        return hues[(max(level, 1) - 1) % hues.count]
     }
 
     /// Speed every ball is normalised to, so slow motion and level ramps stay
@@ -337,7 +410,7 @@ final class BreakoutGame {
         guard boardSize.width > 0 else { return }
         let board = BreakoutLevels.board(for: level)
         layBricks(board.rows, toughening: BreakoutLevels.toughening(for: level), dropping: true)
-        show("LEVEL \(level) · \(board.name.uppercased())", for: 2.2)
+        show("Level \(level) · \(board.name)", for: 2.2)
     }
 
     /// Turns a board's text into bricks. Dropping, they fall in row by row,
@@ -371,6 +444,7 @@ final class BreakoutGame {
         bricks = laid
         combo = 0
         particles.removeAll()
+        rings.removeAll()
         popups.removeAll()
         clearEffects()
         restBallOnPaddle()
@@ -488,6 +562,7 @@ final class BreakoutGame {
         }
         powerups.removeAll()
         particles.removeAll()
+        rings.removeAll()
         lasers.removeAll()
         popups.removeAll()
     }
@@ -501,6 +576,7 @@ final class BreakoutGame {
         shrinkTimeLeft = max(shrinkTimeLeft - delta, 0)
         if bannerLife > 0 {
             bannerLife -= delta
+            bannerAge += delta
             if bannerLife <= 0 { banner = nil }
         }
     }
@@ -519,6 +595,12 @@ final class BreakoutGame {
     private func stepEffects(by delta: Double) {
         shake = max(shake - CGFloat(delta) * 16, 0)
         paddleSquash = max(paddleSquash - delta / 0.2, 0)
+        flash = max(flash - delta * 5, 0)
+
+        for index in rings.indices.reversed() {
+            rings[index].life -= delta
+            if rings[index].life <= 0 { rings.remove(at: index) }
+        }
 
         for index in bricks.indices {
             if bricks[index].flash > 0 { bricks[index].flash = max(bricks[index].flash - delta, 0) }
@@ -532,8 +614,13 @@ final class BreakoutGame {
                 continue
             }
             particles[index].velocity.dy += particles[index].gravity * CGFloat(delta)
+            if particles[index].kind == .smoke || particles[index].kind == .confetti {
+                // Air resistance: smoke drifts to a stop, paper flutters.
+                particles[index].velocity.dx *= CGFloat(pow(0.3, delta))
+            }
             particles[index].position.x += particles[index].velocity.dx * CGFloat(delta)
             particles[index].position.y += particles[index].velocity.dy * CGFloat(delta)
+            particles[index].angle += particles[index].spin * delta
         }
 
         for index in popups.indices.reversed() {
@@ -551,8 +638,9 @@ final class BreakoutGame {
                 particles.append(Particle(
                     position: ball.position,
                     velocity: CGVector(dx: CGFloat.random(in: -18 ... 18), dy: CGFloat.random(in: -30 ... 0)),
-                    life: 0.28, maxLife: 0.28,
+                    life: 0.32, maxLife: 0.32,
                     color: Bool.random() ? Color(red: 1, green: 0.6, blue: 0.15) : Color(red: 1, green: 0.85, blue: 0.3),
+                    size: CGFloat.random(in: 1.5 ... 2.6),
                     gravity: -30
                 ))
             }
@@ -584,6 +672,7 @@ final class BreakoutGame {
                     balls[index].position.y = shieldY - Self.ballRadius
                     shieldTimeLeft = 0
                     burst(at: CGPoint(x: balls[index].position.x, y: shieldY), color: PowerupKind.shield.tint, count: 16)
+                    ring(at: CGPoint(x: balls[index].position.x, y: shieldY), radius: 40, color: PowerupKind.shield.tint)
                     sound.play(.shield)
                 }
 
@@ -596,7 +685,7 @@ final class BreakoutGame {
 
         for index in balls.indices {
             balls[index].trail.insert(balls[index].position, at: 0)
-            if balls[index].trail.count > 7 { balls[index].trail.removeLast() }
+            if balls[index].trail.count > 10 { balls[index].trail.removeLast() }
         }
 
         if balls.isEmpty { loseLife() }
@@ -732,7 +821,7 @@ final class BreakoutGame {
 
         // Every fourth brick in a row raises the multiplier, up to its cap.
         if combo > 1, (combo - 1) % 4 == 0, (combo - 1) / 4 <= 4 {
-            show("COMBO ×\(multiplier)", for: 0.9)
+            show("Combo ×\(multiplier)", for: 0.9, tone: .combo)
             sound.play(.combo)
         }
     }
@@ -775,6 +864,7 @@ final class BreakoutGame {
     private func detonate(_ blast: Blast) {
         let centre = cellFrame(row: blast.row, column: blast.column).center
         shake = max(shake, 3.5)
+        flash = max(flash, 0.55)
         explosion(at: centre)
         sound.play(.boom)
 
@@ -823,6 +913,7 @@ final class BreakoutGame {
 
     private func collect(_ kind: PowerupKind, at point: CGPoint) {
         burst(at: point, color: kind.tint, count: 14)
+        ring(at: point, radius: 34, color: kind.tint)
         popups.append(Popup(
             position: CGPoint(x: point.x, y: point.y - 12), text: kind.name,
             color: kind.tint, life: 1, maxLife: 1
@@ -914,7 +1005,7 @@ final class BreakoutGame {
             }
         } else {
             beginServe()
-            show(lives == 1 ? "LAST BALL" : "\(lives) BALLS LEFT", for: 1.4)
+            show(lives == 1 ? "Last ball" : "\(lives) balls left", for: 1.4)
         }
     }
 
@@ -929,7 +1020,7 @@ final class BreakoutGame {
         buildLevel()
         popups.append(Popup(
             position: CGPoint(x: boardSize.width / 2, y: boardSize.height * 0.78),
-            text: "BOARD CLEAR +\(bonus)", color: Color(red: 0.5, green: 1, blue: 0.6),
+            text: "Board clear +\(bonus)", color: Color(red: 0.5, green: 1, blue: 0.6),
             life: 1.6, maxLife: 1.6
         ))
     }
@@ -939,7 +1030,7 @@ final class BreakoutGame {
         // not news.
         if bestAtStart > 0, score > bestAtStart, !beatHighScore {
             beatHighScore = true
-            show("NEW HIGH SCORE!", for: 1.6)
+            show("New high score!", for: 1.6, tone: .record)
             sound.play(.highScore)
         }
         if score > highScore { highScore = score }
@@ -953,43 +1044,60 @@ final class BreakoutGame {
         }
     }
 
-    private func show(_ text: String, for seconds: Double) {
+    private func show(_ text: String, for seconds: Double, tone: BannerTone = .plain) {
         banner = text
+        bannerTone = tone
         bannerLife = seconds
+        bannerAge = 0
     }
 
     // MARK: - Particles
 
+    /// Sparks, and chips of the brick itself tumbling away.
     private func burst(at point: CGPoint, color: Color, count: Int) {
-        for _ in 0 ..< count where particles.count < 420 {
-            let life = Double.random(in: 0.28 ... 0.55)
+        for index in 0 ..< count where particles.count < 420 {
+            let life = Double.random(in: 0.3 ... 0.6)
+            let isShard = index % 3 == 0
             particles.append(Particle(
                 position: point,
-                velocity: CGVector(dx: CGFloat.random(in: -80 ... 80), dy: CGFloat.random(in: -95 ... 20)),
-                life: life, maxLife: life, color: color
+                velocity: CGVector(dx: CGFloat.random(in: -85 ... 85), dy: CGFloat.random(in: -100 ... 15)),
+                life: isShard ? life * 1.4 : life, maxLife: isShard ? life * 1.4 : life, color: color,
+                size: isShard ? CGFloat.random(in: 2.4 ... 3.6) : CGFloat.random(in: 1.2 ... 2.2),
+                gravity: isShard ? 380 : 220,
+                kind: isShard ? .shard : .spark,
+                angle: Double.random(in: 0 ... .pi),
+                spin: Double.random(in: -14 ... 14)
             ))
         }
     }
 
-    /// Fire, then smoke drifting up.
+    private func ring(at point: CGPoint, radius: CGFloat, color: Color, life: Double = 0.45) {
+        rings.append(Ring(center: point, maxRadius: radius, life: life, maxLife: life, color: color))
+        if rings.count > 12 { rings.removeFirst() }
+    }
+
+    /// A shockwave, fire, then smoke drifting up.
     private func explosion(at point: CGPoint) {
+        ring(at: point, radius: 46, color: Color(red: 1, green: 0.7, blue: 0.3), life: 0.5)
         let fire = [Color(red: 1, green: 0.85, blue: 0.3), Color(red: 1, green: 0.5, blue: 0.15), Color(red: 0.95, green: 0.25, blue: 0.2)]
         for index in 0 ..< 22 where particles.count < 420 {
             let angle = Double(index) / 22 * 2 * .pi + Double.random(in: -0.2 ... 0.2)
-            let speed = CGFloat.random(in: 60 ... 150)
+            let speed = CGFloat.random(in: 60 ... 160)
             let life = Double.random(in: 0.3 ... 0.6)
             particles.append(Particle(
                 position: point,
                 velocity: CGVector(dx: CGFloat(cos(angle)) * speed, dy: CGFloat(sin(angle)) * speed),
                 life: life, maxLife: life, color: fire.randomElement() ?? .orange,
-                size: Bool.random() ? 2 : 4, gravity: 120
+                size: CGFloat.random(in: 1.6 ... 3.4), gravity: 120
             ))
         }
-        for _ in 0 ..< 7 where particles.count < 420 {
+        for _ in 0 ..< 6 where particles.count < 420 {
+            let life = Double.random(in: 0.6 ... 0.9)
             particles.append(Particle(
                 position: point,
-                velocity: CGVector(dx: CGFloat.random(in: -25 ... 25), dy: CGFloat.random(in: -40 ... -10)),
-                life: 0.7, maxLife: 0.7, color: Color(white: 0.55), size: 4, gravity: -20
+                velocity: CGVector(dx: CGFloat.random(in: -30 ... 30), dy: CGFloat.random(in: -45 ... -12)),
+                life: life, maxLife: life, color: Color(white: 0.6), size: CGFloat.random(in: 5 ... 8),
+                gravity: -20, kind: .smoke
             ))
         }
     }
@@ -997,12 +1105,13 @@ final class BreakoutGame {
     private func confetti() {
         let colours: [Color] = [.pink, .yellow, .cyan, .mint, .orange, .purple]
         for _ in 0 ..< 70 where particles.count < 420 {
-            let life = Double.random(in: 1.0 ... 1.8)
+            let life = Double.random(in: 1.2 ... 2.0)
             particles.append(Particle(
                 position: CGPoint(x: CGFloat.random(in: 0 ... boardSize.width), y: -4),
-                velocity: CGVector(dx: CGFloat.random(in: -30 ... 30), dy: CGFloat.random(in: 20 ... 90)),
+                velocity: CGVector(dx: CGFloat.random(in: -40 ... 40), dy: CGFloat.random(in: 20 ... 90)),
                 life: life, maxLife: life, color: colours.randomElement() ?? .pink,
-                size: 2, gravity: 60
+                size: CGFloat.random(in: 2.5 ... 4), gravity: 60, kind: .confetti,
+                angle: Double.random(in: 0 ... .pi), spin: Double.random(in: -9 ... 9)
             ))
         }
     }
@@ -1024,18 +1133,18 @@ final class BreakoutGame {
     }
 
     var overlayTitle: String? {
-        if isPaused { return "PAUSED" }
+        if isPaused { return "Paused" }
         switch phase {
-        case .over: return beatHighScore ? "NEW HIGH SCORE!" : "GAME OVER"
+        case .over: return beatHighScore ? "New high score!" : "Game over"
         case .intro, .serving, .running: return nil
         }
     }
 
     var overlaySubtitle: String {
         if phase == .over, !isPaused {
-            return "\(score) points · reached level \(level) · click to play again"
+            return "\(score.formatted()) points · level \(level) · click to play again"
         }
-        return "Move the mouse to steer · click to resume"
+        return "Move the pointer to steer · click to resume"
     }
 
     // MARK: - Preview and testing

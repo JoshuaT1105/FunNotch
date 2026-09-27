@@ -37,13 +37,17 @@ enum PreviewRenderer {
             idle: settings.idleWidgetsEnabled,
             idleLeft: settings.idleLeftWidgets,
             idleRight: settings.idleRightWidgets,
-            mediaDisplay: settings.closedMediaDisplay
+            mediaDisplay: settings.closedMediaDisplay,
+            game: settings.selectedGame,
+            skin: settings.dinoSkin
         )
         restoreSettings = {
             settings.idleWidgetsEnabled = saved.idle
             settings.idleLeftWidgets = saved.idleLeft
             settings.idleRightWidgets = saved.idleRight
             settings.closedMediaDisplay = saved.mediaDisplay
+            settings.selectedGame = saved.game
+            settings.dinoSkin = saved.skin
         }
 
         // The render process has no location permission, so without this every
@@ -117,7 +121,9 @@ enum PreviewRenderer {
         }))
 
         scenes.append(("open-focus", { viewModel in
+            FocusManager.shared.previewHistory = Self.sampleFocusHistory()
             FocusManager.shared.injectPreviewSession(minutes: 25, elapsedFraction: 0.35)
+            FocusTabState.shared.mode = .focus
             viewModel.refreshPreviewFocusActivity()
             viewModel.previewOpen()
             viewModel.currentTab = .focus
@@ -141,15 +147,36 @@ enum PreviewRenderer {
         }))
 
         scenes.append(("open-timer", { viewModel in
-            TimerManager.shared.start(seconds: 600)
+            FocusManager.shared.clearPreviewSession()
+            viewModel.setPreviewFocusActivity(false)
+            TimerManager.shared.previewRecent = [720, 2700, 90, 5400]
+            TimerManager.shared.injectPreviewCountdown(duration: 600, remaining: 372)
+            FocusTabState.shared.mode = .timer
             viewModel.previewOpen()
-            viewModel.currentTab = .timer
+            viewModel.currentTab = .focus
+        }))
+
+        scenes.append(("open-timer-idle", { viewModel in
+            TimerManager.shared.resetCountdown()
+            TimerManager.shared.draft = 1500
+            FocusTabState.shared.mode = .timer
+            viewModel.previewOpen()
+            viewModel.currentTab = .focus
+        }))
+
+        scenes.append(("open-timer-done", { viewModel in
+            TimerManager.shared.injectPreviewCountdown(duration: 300, remaining: 0, finished: true)
+            FocusTabState.shared.mode = .timer
+            viewModel.previewOpen()
+            viewModel.currentTab = .focus
         }))
 
         scenes.append(("open-stopwatch", { viewModel in
-            TimerManager.shared.injectPreviewStopwatch(elapsed: 74.32, laps: [61.08, 32.55])
+            TimerManager.shared.resetCountdown()
+            TimerManager.shared.injectPreviewStopwatch(elapsed: 134.32, laps: [31.2, 36.9, 28.4, 33.1])
+            FocusTabState.shared.mode = .stopwatch
             viewModel.previewOpen()
-            viewModel.currentTab = .timer
+            viewModel.currentTab = .focus
         }))
 
         scenes.append(("open-clipboard", { viewModel in
@@ -194,6 +221,7 @@ enum PreviewRenderer {
         }))
 
         scenes.append(("open-game", { viewModel in
+            Settings.shared.selectedGame = GameChoice.breakout.rawValue
             viewModel.previewOpen()
             viewModel.currentTab = .game
             // An untouched board is a boring screenshot, and it would not show
@@ -203,6 +231,7 @@ enum PreviewRenderer {
 
         // Later in a run: explosives, lasers and a fireball on the Invader.
         scenes.append(("open-game-chaos", { viewModel in
+            Settings.shared.selectedGame = GameChoice.breakout.rawValue
             viewModel.previewOpen()
             viewModel.currentTab = .game
             BreakoutGame.shared.playForPreview(seconds: 1.6, level: 4, effects: [.laser, .fireball, .multiball])
@@ -210,9 +239,52 @@ enum PreviewRenderer {
 
         // Every kind of brick, untouched: steel, explosive, gold, mystery.
         scenes.append(("open-game-fortress", { viewModel in
+            Settings.shared.selectedGame = GameChoice.breakout.rawValue
             viewModel.previewOpen()
             viewModel.currentTab = .game
             BreakoutGame.shared.playForPreview(seconds: 0, level: 5)
+        }))
+
+        // Dino Run: the start line, then the same desert at four times of day.
+        scenes.append(("open-dino-ready", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+        }))
+
+        scenes.append(("open-dino-day", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            DinoGame.shared.playForPreview(seconds: 5.2, score: 120)
+        }))
+
+        scenes.append(("open-dino-sunset", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            DinoGame.shared.playForPreview(seconds: 3, score: 470, powers: [.wings, .magnet])
+        }))
+
+        scenes.append(("open-dino-night", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            DinoGame.shared.playForPreview(seconds: 4.4, score: 900, powers: [.shield])
+        }))
+
+        scenes.append(("open-dino-turbo", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            DinoGame.shared.playForPreview(seconds: 1.4, score: 1700, powers: [.turbo])
+        }))
+
+        scenes.append(("open-dino-over", { viewModel in
+            Settings.shared.selectedGame = GameChoice.dino.rawValue
+            viewModel.previewOpen()
+            viewModel.currentTab = .game
+            DinoGame.shared.playForPreview(seconds: 2.5, score: 40, crash: true)
         }))
 
         scenes.append(("closed-music-and-widgets", { viewModel in
@@ -253,6 +325,8 @@ enum PreviewRenderer {
         scenes.append(("open-focus-idle", { viewModel in
             Settings.shared.idleWidgetsEnabled = false
             FocusManager.shared.clearPreviewSession()
+            FocusManager.shared.previewHistory = Self.sampleFocusHistory()
+            FocusTabState.shared.mode = .focus
             viewModel.setPreviewFocusActivity(false)
             viewModel.previewOpen()
             viewModel.currentTab = .focus
@@ -344,6 +418,7 @@ enum PreviewRenderer {
         guard index < scenes.count else {
             restoreSettings?()
             FocusManager.shared.clearPreviewSession()
+            TimerManager.shared.clearPreview()
             renderExtras(into: directory) {
                 NSApp.terminate(nil)
             }
@@ -480,6 +555,28 @@ enum PreviewRenderer {
             )
         }))
 
+        jobs.append(("tile-focus-medium", CGSize(width: 390, height: 190), true, {
+            FocusManager.shared.previewHistory = Self.sampleFocusHistory()
+            TimerManager.shared.injectPreviewCountdown(duration: 600, remaining: 372)
+            FocusTabState.shared.mode = .timer
+            return AnyView(
+                FocusView(isTile: true)
+                    .environmentObject(Settings.shared)
+                    .frame(width: 352, height: 150)
+                    .padding(19)
+                    .background(Color.black)
+            )
+        }))
+        jobs.append(("tile-focus-narrow", CGSize(width: 160, height: 190), true, {
+            AnyView(
+                FocusView(isTile: true)
+                    .environmentObject(Settings.shared)
+                    .frame(width: 118, height: 150)
+                    .padding(19)
+                    .background(Color.black)
+            )
+        }))
+
         for tab in SettingsTab.allCases {
             jobs.append(("settings-\(tab.rawValue)", CGSize(width: 820, height: 640), false, {
                 if tab == .agents { AgentSessionsManager.shared.injectPreviewSessions(Self.sampleSessions()) }
@@ -510,6 +607,22 @@ enum PreviewRenderer {
             }
         }
         next(0)
+    }
+
+    /// An invented week of focus: a few good days, one off, a streak running
+    /// into today.
+    static func sampleFocusHistory() -> (seconds: [String: Int], sessions: [String: Int]) {
+        let minutes = [95, 0, 50, 140, 75, 110, 40]
+        var seconds: [String: Int] = [:]
+        var sessions: [String: Int] = [:]
+        let today = Calendar.current.startOfDay(for: Date())
+        for (back, value) in minutes.reversed().enumerated() {
+            guard let day = Calendar.current.date(byAdding: .day, value: -back, to: today) else { continue }
+            let key = FocusManager.dayKey(day)
+            seconds[key] = value * 60
+            sessions[key] = value / 25
+        }
+        return (seconds, sessions)
     }
 
     /// Made-up sessions: one working, one waiting on a permission prompt, one

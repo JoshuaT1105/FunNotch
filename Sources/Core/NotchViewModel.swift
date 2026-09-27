@@ -127,6 +127,7 @@ final class NotchViewModel: ObservableObject {
                 // Starting a session while the game is open would otherwise
                 // leave it running behind a tab that no longer exists.
                 if active, self.currentTab == .game {
+                    FocusTabState.shared.mode = .focus
                     withAnimation(.notchContent) { self.currentTab = .focus }
                 }
             }

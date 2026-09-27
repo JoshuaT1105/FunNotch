@@ -181,20 +181,42 @@ private struct ClockWidget: View {
     }
 }
 
+/// The focus countdown, or a running timer when there is no session — they
+/// share a tab now, so they share the widget too.
 private struct FocusTimerWidget: View {
     @ObservedObject private var focus = FocusManager.shared
+    @ObservedObject private var timer = TimerManager.shared
     @EnvironmentObject private var settings: Settings
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: focus.isOnBreak ? "cup.and.saucer" : "cup.and.saucer.fill")
+            Image(systemName: symbol)
                 .font(.system(size: 9, weight: .medium))
-            Text(focus.isActive ? focus.compactRemainingText : "—")
+            Text(text)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .monospacedDigit()
         }
-        .foregroundStyle(focus.isActive ? settings.accentColor : .white.opacity(0.4))
+        .foregroundStyle(colour)
         .fixedSize()
+    }
+
+    private var showsTimer: Bool { !focus.isActive && timer.countdownIsSet }
+
+    private var symbol: String {
+        if showsTimer { return timer.finished ? "bell.fill" : "timer" }
+        return focus.isOnBreak ? "cup.and.saucer" : "cup.and.saucer.fill"
+    }
+
+    private var text: String {
+        if focus.isActive { return focus.compactRemainingText }
+        if showsTimer { return timer.finished ? "0:00" : TimerManager.clock(timer.remaining) }
+        return "—"
+    }
+
+    private var colour: Color {
+        if focus.isActive { return focus.isOnBreak ? ClockPalette.rest : settings.accentColor }
+        if showsTimer { return timer.finished ? ClockPalette.alarm : ClockPalette.timer }
+        return .white.opacity(0.4)
     }
 }
 

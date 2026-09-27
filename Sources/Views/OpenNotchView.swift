@@ -30,8 +30,6 @@ struct OpenNotchView: View {
                     FocusView()
                 case .notes:
                     NotesView()
-                case .timer:
-                    TimerView()
                 case .game:
                     // Belt and braces: the tab is already gone from the header
                     // during a session, but nothing should be able to land here
@@ -66,10 +64,11 @@ private struct GameBlockedDuringFocus: View {
             Text("Not while you're focusing")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
-            Text("Notch Breakout comes back in \(focus.compactRemainingText).")
+            Text("The games come back in \(focus.compactRemainingText).")
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.55))
             Button("Take me to the timer") {
+                FocusTabState.shared.mode = .focus
                 withAnimation(.notchContent) { viewModel.currentTab = .focus }
             }
             .buttonStyle(.plain)
@@ -159,7 +158,6 @@ struct NotchHeader: View {
             case .shelf: return settings.shelfEnabled
             case .clipboard: return settings.clipboardHistoryEnabled
             case .notes: return settings.showNotes
-            case .timer: return settings.showTimer
             // A focus session is a promise not to get distracted, and a game in
             // the notch is the most distracting thing in here.
             case .game: return !FocusManager.shared.isActive
@@ -202,6 +200,7 @@ private struct TabChip: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) { isHovering = hovering }
         }
+        .help(tab.title)
     }
 }
 

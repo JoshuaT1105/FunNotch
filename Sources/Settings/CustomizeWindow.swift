@@ -402,7 +402,7 @@ extension HomeTileKind {
         case .mirror: return "A camera check before calls"
         case .agents: return "Claude Code sessions, live"
         case .notes: return "A quick scratchpad"
-        case .timer: return "Countdowns and a stopwatch"
+        case .timer: return "Focus, timers and a stopwatch"
         case .quickActions: return "One-click shortcuts"
         case .systemStats: return "CPU and memory"
         case .battery: return "Charge and time left"

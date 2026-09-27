@@ -134,6 +134,13 @@ final class FocusManager: ObservableObject {
         announce(icon: "checkmark.circle.fill")
     }
 
+    /// Cuts a pomodoro break short and goes straight back to work.
+    func skipBreak() {
+        guard isActive, isOnBreak else { return }
+        isOnBreak = false
+        startInterval(minutes: workMinutes)
+    }
+
     func extend(byMinutes minutes: Int) {
         guard isActive, let endDate else { return }
         let newEnd = endDate.addingTimeInterval(TimeInterval(minutes * 60))
@@ -170,6 +177,7 @@ final class FocusManager: ObservableObject {
             } else {
                 completedCycles += 1
                 settings.focusSessionsCompleted += 1
+                logSession()
                 isOnBreak = true
                 startInterval(minutes: max(settings.focusBreakMinutes, 1))
             }
@@ -185,6 +193,7 @@ final class FocusManager: ObservableObject {
         }
 
         settings.focusSessionsCompleted += 1
+        logSession()
         isActive = false
         isOnBreak = false
         endDate = nil
@@ -209,6 +218,111 @@ final class FocusManager: ObservableObject {
         guard !isOnBreak, totalDuration > 0 else { return }
         let elapsed = max(totalDuration - remaining, 0)
         settings.focusMinutesTotal += Int(elapsed / 60)
+        logFocus(seconds: elapsed)
+    }
+
+    // MARK: - History
+    //
+    // Per-day totals, so the Focus tab can chart the week and count a streak
+    // in days rather than only a lifetime number of sessions.
+
+    /// Set by the snapshot renderer, so a screenshot shows an invented week
+    /// rather than the real one.
+    var previewHistory: (seconds: [String: Int], sessions: [String: Int])?
+
+    private var dailySeconds: [String: Int] { previewHistory?.seconds ?? settings.focusDailySeconds }
+    private var dailySessions: [String: Int] { previewHistory?.sessions ?? settings.focusDailySessions }
+
+    /// "yyyy-MM-dd" in the user's own calendar and time zone.
+    nonisolated static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    private func logFocus(seconds: TimeInterval) {
+        guard seconds >= 1, previewHistory == nil else { return }
+        var log = settings.focusDailySeconds
+        log[Self.dayKey(Date()), default: 0] += Int(seconds.rounded())
+        settings.focusDailySeconds = Self.trimmed(log)
+    }
+
+    private func logSession() {
+        guard previewHistory == nil else { return }
+        var log = settings.focusDailySessions
+        log[Self.dayKey(Date()), default: 0] += 1
+        settings.focusDailySessions = Self.trimmed(log)
+    }
+
+    /// A little over a year: plenty for any streak, and still a tiny plist.
+    nonisolated private static func trimmed(_ log: [String: Int]) -> [String: Int] {
+        guard log.count > 400 else { return log }
+        let keep = log.keys.sorted().suffix(400)
+        return log.filter { keep.contains($0.key) }
+    }
+
+    /// Time spent working in the session that is running now.
+    private var liveSeconds: Int {
+        guard isActive, !isOnBreak else { return 0 }
+        return Int(max(totalDuration - remaining, 0))
+    }
+
+    /// Focused today, including the session running now.
+    var todaySeconds: Int {
+        (dailySeconds[Self.dayKey(Date())] ?? 0) + liveSeconds
+    }
+
+    var todaySessions: Int {
+        dailySessions[Self.dayKey(Date())] ?? 0
+    }
+
+    /// The last seven days, oldest first and today last, with the session
+    /// running now counted in today.
+    var week: [(day: Date, seconds: Int)] {
+        var log = dailySeconds
+        log[Self.dayKey(Date()), default: 0] += liveSeconds
+        return Self.week(in: log, endingOn: Date())
+    }
+
+    var streak: Int {
+        var log = dailySeconds
+        log[Self.dayKey(Date()), default: 0] += liveSeconds
+        return Self.streak(in: log, asOf: Date())
+    }
+
+    nonisolated static func week(
+        in log: [String: Int], endingOn date: Date, calendar: Calendar = .current
+    ) -> [(day: Date, seconds: Int)] {
+        let today = calendar.startOfDay(for: date)
+        return (0 ..< 7).reversed().compactMap { back in
+            guard let day = calendar.date(byAdding: .day, value: -back, to: today) else { return nil }
+            return (day, log[dayKey(day, calendar: calendar)] ?? 0)
+        }
+    }
+
+    /// Days in a row with at least a minute of focus. Today only counts once
+    /// it has some, so the streak is not shown as broken first thing in the
+    /// morning — it runs to yesterday until then.
+    nonisolated static func streak(in log: [String: Int], asOf date: Date, calendar: Calendar = .current) -> Int {
+        var day = calendar.startOfDay(for: date)
+        if (log[dayKey(day, calendar: calendar)] ?? 0) < 60 {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: day) else { return 0 }
+            day = yesterday
+        }
+        var count = 0
+        while (log[dayKey(day, calendar: calendar)] ?? 0) >= 60 {
+            count += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return count
+    }
+
+    /// "1 h 25 m", "40 m", "0 m".
+    nonisolated static func duration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes) m" }
+        let rest = minutes % 60
+        return rest == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(rest) m"
     }
 
     // MARK: - App blocking
@@ -278,8 +392,17 @@ final class FocusManager: ObservableObject {
         isActive = true
     }
 
+    /// Poses a pomodoro part of the way through its cycles, for the snapshot
+    /// renderer.
+    func injectPreviewCycles(_ cycles: Int, onBreak: Bool) {
+        completedCycles = cycles
+        isOnBreak = onBreak
+    }
+
     /// Undoes `injectPreviewSession`.
     func clearPreviewSession() {
+        completedCycles = 0
+        isOnBreak = false
         isActive = false
         endDate = nil
         remaining = 0

@@ -704,14 +704,16 @@ struct FocusPage: View {
     var body: some View {
         SettingsPage(
             title: "Focus",
-            subtitle: "A countdown in the notch, and fewer ways to wander off.",
+            subtitle: "Focus sessions, timers and a stopwatch, and fewer ways to wander off.",
             symbol: SettingsTab.focus.symbol,
             tint: SettingsTab.focus.tint
         ) {
             SettingsCard(title: "Sessions") {
-                SettingsRow(title: "Default length") {
+                SettingsRow(title: "Default length", subtitle: "Or drag the dial round in the notch.") {
                     Picker("", selection: $settings.focusDefaultMinutes) {
-                        ForEach([15, 25, 45, 60, 90], id: \.self) { minutes in
+                        // The dial sets any five minutes, so whatever it was
+                        // left on has to be one of the choices here too.
+                        ForEach(Array(Set([15, 25, 45, 60, 90, settings.focusDefaultMinutes])).sorted(), id: \.self) { minutes in
                             Text("\(minutes)m").tag(minutes)
                         }
                     }

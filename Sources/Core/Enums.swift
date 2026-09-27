@@ -33,9 +33,9 @@ enum NotchTab: String, CaseIterable, Identifiable {
     case home = "Home"
     case shelf = "Shelf"
     case clipboard = "Clipboard"
+    /// Focus sessions, the countdown timer and the stopwatch, together.
     case focus = "Focus"
     case notes = "Notes"
-    case timer = "Timer"
     case game = "Game"
 
     var id: String { rawValue }
@@ -45,10 +45,18 @@ enum NotchTab: String, CaseIterable, Identifiable {
         case .home: return "house.fill"
         case .shelf: return "tray.fill"
         case .clipboard: return "doc.on.clipboard.fill"
-        case .focus: return "cup.and.saucer.fill"
+        case .focus: return "timer"
         case .notes: return "note.text"
-        case .timer: return "timer"
         case .game: return "gamecontroller.fill"
+        }
+    }
+
+    /// What the tab is called in its tooltip, where there is room to say it.
+    var title: String {
+        switch self {
+        case .focus: return "Focus & Timer"
+        case .game: return "Games"
+        default: return rawValue
         }
     }
 }

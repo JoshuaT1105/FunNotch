@@ -138,7 +138,8 @@ private struct QuickActionsPanel: View {
                 try? task.run()
             }
             action("timer", "Timer", tint: TimerManager.shared.isActive ? .green : nil) {
-                viewModel.currentTab = .timer
+                FocusTabState.shared.mode = .timer
+                viewModel.currentTab = .focus
             }
         }
     }
@@ -455,15 +456,24 @@ private struct DevicesPanel: View {
 
 private struct FocusStreakPanel: View {
     @ObservedObject private var settings = Settings.shared
+    @ObservedObject private var focus = FocusManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            PanelLabel(text: "Focus")
-            Text("\(settings.focusSessionsCompleted)")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.92))
-            Text("\(settings.focusMinutesTotal) min total")
+            PanelLabel(text: "Focus streak")
+            HStack(spacing: 3) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(focus.streak > 0 ? Color.orange : .white.opacity(0.3))
+                Text("\(focus.streak)")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(focus.streak == 1 ? "day" : "days")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            Text("Today \(FocusManager.duration(focus.todaySeconds))")
                 .font(.system(size: 8.5))
                 .foregroundStyle(.white.opacity(0.45))
                 .lineLimit(1)
