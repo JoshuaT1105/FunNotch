@@ -124,6 +124,19 @@ enum SelfTest {
         info("measured notch", "\(Int(notch.width)) x \(Int(notch.height))")
         check("notch measurement is plausible", notch.width > 100 && notch.height > 10)
 
+        // Every tab has to fit to the left of the camera. Past its edge a tab
+        // is under the camera housing, invisible and unclickable, which is
+        // where the Game tab spent a while.
+        let allTabs = NotchTab.allCases.count
+        let tabWidth = NotchHeader.tabWidth(count: allTabs, cutoutWidth: notch.width)
+        let tabRow = tabWidth * CGFloat(allTabs) + NotchHeader.tabSpacing * CGFloat(allTabs - 1)
+        let tabRoom = (openNotchSize.width - 44 - notch.width) / 2
+        check(
+            "all \(allTabs) tabs fit beside the camera",
+            tabRow <= tabRoom && tabWidth >= 24,
+            detail: "\(Int(tabRow)) of \(Int(tabRoom)) pt, \(Int(tabWidth)) pt each"
+        )
+
         // MARK: Managers
         MusicManager.shared.start()
         BatteryManager.shared.start()

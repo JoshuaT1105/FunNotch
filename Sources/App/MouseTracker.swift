@@ -32,6 +32,11 @@ final class MouseTracker {
     private var pasteboardMarker = 0
     /// Runs only between mouse-down and mouse-up.
     private var dragPollTimer: Timer?
+    /// The button went down in one of the app's own windows — Settings or
+    /// Customize — so whatever gets dragged is being rearranged there, not
+    /// brought to the shelf. Without this, dragging a widget in the editor
+    /// opened the notch's drop zone.
+    private var dragStartedInOwnWindow = false
 
     private init() {}
 
@@ -48,8 +53,11 @@ final class MouseTracker {
             self?.endDrag()
         }
 
-        addMonitors(matching: [.leftMouseDown]) { [weak self] _ in
+        addMonitors(matching: [.leftMouseDown]) { [weak self] event in
             guard let self else { return }
+            // Only the local monitor's events carry a window; clicks in other
+            // apps arrive through the global one without.
+            self.dragStartedInOwnWindow = event.window?.styleMask.contains(.titled) ?? false
             self.pasteboardMarker = NSPasteboard(name: .drag).changeCount
             self.startDragPolling()
             self.onClick?(NSEvent.mouseLocation)
@@ -92,7 +100,7 @@ final class MouseTracker {
             return
         }
 
-        guard !isDragging, Settings.shared.expandedDragDetection else { return }
+        guard !isDragging, !dragStartedInOwnWindow, Settings.shared.expandedDragDetection else { return }
 
         let pasteboard = NSPasteboard(name: .drag)
         guard pasteboard.changeCount != pasteboardMarker,

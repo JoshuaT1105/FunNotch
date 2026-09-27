@@ -90,15 +90,19 @@ struct NotchHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: Self.tabSpacing) {
                 ForEach(availableTabs) { tab in
+                    let labelled = viewModel.currentTab == tab && availableTabs.count <= 4
                     TabChip(
                         tab: tab,
                         isSelected: viewModel.currentTab == tab,
                         // The header shares its row with the camera cutout, so
                         // only the selected tab is labelled, and only while
                         // there are few enough tabs for it to fit.
-                        showsLabel: viewModel.currentTab == tab && availableTabs.count <= 4
+                        showsLabel: labelled,
+                        width: labelled ? nil : Self.tabWidth(
+                            count: availableTabs.count, cutoutWidth: viewModel.closedNotchSize.width
+                        )
                     ) {
                         withAnimation(.notchContent) { viewModel.currentTab = tab }
                     }
@@ -135,6 +139,20 @@ struct NotchHeader: View {
         }
     }
 
+    static let tabSpacing: CGFloat = 4
+
+    /// Width of one tab button, chosen so every tab fits on its side of the
+    /// camera. They used to size themselves, and seven of them ran past the
+    /// edge of the cutout: the last one, Game, sat under the camera housing
+    /// where it could not be seen or clicked.
+    static func tabWidth(count: Int, cutoutWidth: CGFloat) -> CGFloat {
+        // The space left of the cutout, less a margin so nothing hugs the
+        // camera's edge.
+        let side = (openNotchSize.width - 44 - cutoutWidth) / 2 - 8
+        let tabs = CGFloat(max(count, 1))
+        return max(min(34, (side - (tabs - 1) * tabSpacing) / tabs), 20)
+    }
+
     private var availableTabs: [NotchTab] {
         NotchTab.allCases.filter { tab in
             switch tab {
@@ -155,6 +173,8 @@ private struct TabChip: View {
     let tab: NotchTab
     let isSelected: Bool
     let showsLabel: Bool
+    /// A fixed width, for icon-only tabs that have to share the row.
+    var width: CGFloat?
     let action: () -> Void
 
     @State private var isHovering = false
@@ -170,11 +190,13 @@ private struct TabChip: View {
                 }
             }
             .foregroundStyle(isSelected ? .white : .white.opacity(0.55))
-            .padding(.horizontal, 9)
+            .padding(.horizontal, width == nil ? 9 : 0)
+            .frame(width: width)
             .padding(.vertical, 4)
             .background(
                 Capsule().fill(Color.white.opacity(isSelected ? 0.18 : (isHovering ? 0.1 : 0)))
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
