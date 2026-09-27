@@ -472,6 +472,21 @@ enum SelfTest {
         )
         info("location permission", "\(WeatherManager.shared.authorization.rawValue)")
 
+        // The weather's set pieces run on a schedule of their own; if the
+        // schedule broke they would simply never happen, which nobody notices.
+        check(
+            "a storm throws lightning within a minute",
+            PixelWeatherView.nextStrike(after: 5000).map { $0 - 5000 < 60 } ?? false
+        )
+        check(
+            "a clear night has a shooting star within a minute",
+            PixelWeatherView.nextMeteor(after: 5000).map { $0 - 5000 < 60 } ?? false
+        )
+        check(
+            "every weather code maps to a scene with its own label",
+            Set([0, 3, 45, 53, 63, 95, 73].map { WeatherScene.from(code: $0, isDay: true).label }).count == 7
+        )
+
         // MARK: Meeting links
         check(
             "a Zoom link is found in event notes",

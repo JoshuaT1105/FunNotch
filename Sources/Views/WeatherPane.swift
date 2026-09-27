@@ -19,17 +19,23 @@ struct WeatherPane: View {
         return WeatherScene.from(code: conditions.weatherCode, isDay: conditions.isDay)
     }
 
+    private var isNight: Bool { !(weather.conditions?.isDay ?? true) }
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.white.opacity(0.04))
 
-            PixelWeatherView(scene: scene)
+            // A new forecast crossfades into the next scene rather than cutting.
+            PixelWeatherView(scene: scene, isNight: isNight)
+                .id("\(scene)-\(isNight)")
+                .transition(.opacity)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             content
                 .padding(.horizontal, 14)
         }
+        .animation(.easeInOut(duration: 0.9), value: "\(scene)-\(isNight)")
         .onAppear { weather.addSubscriber() }
         .onDisappear { weather.removeSubscriber() }
     }
@@ -41,20 +47,25 @@ struct WeatherPane: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(weather.temperatureText ?? "—")
                         .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.95))
+                        .foregroundStyle(.white.opacity(0.97))
                         .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.snappy, value: weather.temperatureText)
 
                     Text(scene.label)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(scene.accent.opacity(0.95))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(scene.accent)
 
                     if let place = weather.conditions?.placeName {
                         Text(place)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
                             .lineLimit(1)
                     }
                 }
+                // The sky behind is a colour now, not black; a soft shadow
+                // keeps the text clear of whatever is drifting past.
+                .shadow(color: .black.opacity(0.45), radius: 3, y: 1)
 
                 Spacer(minLength: 0)
             }

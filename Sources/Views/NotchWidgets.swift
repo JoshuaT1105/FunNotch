@@ -333,10 +333,14 @@ private struct WeatherWidget: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: weather.symbolName)
-                .font(.system(size: 10, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.white.opacity(0.85))
+            if let conditions = weather.conditions {
+                PixelWeatherIcon(scene: WeatherScene.from(code: conditions.weatherCode, isDay: conditions.isDay))
+            } else {
+                Image(systemName: weather.symbolName)
+                    .font(.system(size: 10, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white.opacity(0.85))
+            }
             Text(weather.temperatureText ?? "—")
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .monospacedDigit()

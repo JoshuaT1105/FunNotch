@@ -29,6 +29,8 @@ enum PreviewRenderer {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         // Entrances are drawn finished: the capture cannot wait for them.
         Motion.snapshotMode = true
+        // And the weather is drawn at a known moment rather than whenever.
+        PixelWeatherView.frozenTime = 1000.4
 
         let settings = Settings.shared
         let saved = (
@@ -349,8 +351,92 @@ enum PreviewRenderer {
 
     // MARK: Tiles and windows
 
+    /// Every weather scene as the pane shows it, with a filmstrip of its
+    /// motion underneath, and the collapsed-notch icons. Drawn straight to
+    /// images: the weather is a pure function of time, so no window is needed
+    /// and no animation has to be waited for.
+    private static func renderWeatherSheets(into directory: URL) {
+        let variants: [(name: String, scene: WeatherScene, code: Int, night: Bool, celsius: Double)] = [
+            ("clear-day", .clearDay, 0, false, 24),
+            ("clear-night", .clearNight, 0, true, 14),
+            ("cloudy-day", .cloudy, 3, false, 17),
+            ("cloudy-night", .cloudy, 3, true, 11),
+            ("fog", .fog, 45, false, 9),
+            ("drizzle", .drizzle, 53, false, 12),
+            ("rain", .rain, 63, false, 11),
+            ("rain-night", .rain, 63, true, 9),
+            ("storm", .storm, 95, true, 16),
+            ("snow-day", .snow, 73, false, -2),
+            ("snow-night", .snow, 73, true, -6),
+        ]
+        let size = CGSize(width: 420, height: 100)
+        let saved = PixelWeatherView.frozenTime
+
+        for variant in variants {
+            var start = 1000.4
+            var step = 0.25
+            if variant.scene == .storm, let strike = PixelWeatherView.nextStrike(after: 1000) {
+                start = strike - 0.08
+                step = 0.08
+            } else if variant.scene == .clearNight, let meteor = PixelWeatherView.nextMeteor(after: 1000) {
+                start = meteor - 0.15
+                step = 0.15
+            }
+            let times = (0 ..< 4).map { start + Double($0) * step }
+
+            WeatherManager.shared.injectPreviewConditions(
+                temperatureCelsius: variant.celsius, weatherCode: variant.code,
+                isDay: !variant.night, placeName: "Cupertino"
+            )
+            PixelWeatherView.frozenTime = times[1]
+
+            let sheet = VStack(alignment: .leading, spacing: 8) {
+                WeatherPane()
+                    .frame(width: size.width, height: size.height)
+                ForEach(times, id: \.self) { time in
+                    PixelWeatherView(scene: variant.scene, isNight: variant.night, time: time)
+                        .frame(width: size.width, height: size.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .padding(10)
+            .background(Color.black)
+            .environment(\.colorScheme, .dark)
+
+            writeImage(sheet, scale: 2, to: directory.appendingPathComponent("weather-\(variant.name).png"))
+        }
+
+        // The collapsed-notch icons, eight times life size so each cell shows.
+        let icons = HStack(spacing: 6) {
+            ForEach([WeatherScene.clearDay, .clearNight, .cloudy, .fog, .drizzle, .rain, .storm, .snow], id: \.self) { scene in
+                PixelWeatherIcon(scene: scene)
+                    .padding(3)
+                    .background(Color.black)
+            }
+        }
+        .padding(4)
+        .background(Color(white: 0.2))
+        PixelWeatherView.frozenTime = 1000.1
+        writeImage(icons, scale: 8, to: directory.appendingPathComponent("weather-icons.png"))
+
+        PixelWeatherView.frozenTime = saved
+        WeatherManager.shared.injectPreviewConditions(
+            temperatureCelsius: 21, weatherCode: 0, isDay: true, placeName: "Cupertino"
+        )
+    }
+
+    private static func writeImage(_ view: some View, scale: CGFloat, to url: URL) {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        guard let image = renderer.cgImage,
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { return }
+        try? data.write(to: url)
+    }
+
     /// The Agents tile on its own, and every page of the two windows.
     private static func renderExtras(into directory: URL, completion: @escaping () -> Void) {
+        renderWeatherSheets(into: directory)
         var jobs: [(name: String, size: CGSize, dark: Bool, make: () -> AnyView)] = []
 
         jobs.append(("tile-agents", CGSize(width: 300, height: 128), true, {
