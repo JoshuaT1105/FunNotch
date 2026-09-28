@@ -48,7 +48,9 @@ struct AgendaItem: Identifiable, Equatable {
     /// True when the event is happening right now.
     var isCurrent: Bool {
         guard let start, let end else { return false }
-        let now = Date()
+        // The film clock, when rendering a video, so the labels agree with
+        // the time on screen rather than the time the video was made.
+        let now = Motion.filmDate ?? Date()
         return start <= now && now <= end
     }
 
@@ -56,11 +58,13 @@ struct AgendaItem: Identifiable, Equatable {
     var countdownText: String? {
         guard let start else { return nil }
         if isCurrent { return "now" }
-        let seconds = start.timeIntervalSinceNow
+        let seconds = start.timeIntervalSince(Motion.filmDate ?? Date())
         guard seconds > 0, seconds < 6 * 3600 else { return nil }
         let minutes = Int(seconds / 60)
         if minutes < 1 { return "in under a minute" }
         if minutes < 60 { return "in \(minutes)m" }
+        // "in 2h", not "in 2h 0m".
+        if minutes % 60 == 0 { return "in \(minutes / 60)h" }
         return "in \(minutes / 60)h \(minutes % 60)m"
     }
 
