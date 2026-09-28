@@ -40,6 +40,13 @@ enum FilmRenderer {
     }
 
     static let fps = 60.0
+
+    /// The display with the camera notch, whichever one is main: with an
+    /// external monitor as the main display, the film would otherwise be
+    /// measured against a screen that has no notch.
+    private static var filmScreen: NSScreen? {
+        NSScreen.screens.first(where: \.hasPhysicalNotch) ?? NSScreen.main
+    }
     static let scale: CGFloat = 4
 
     private struct Shot {
@@ -92,7 +99,7 @@ enum FilmRenderer {
         var shotInfo: [String: Any] = [:]
         for shot in shots(base: base) {
             if let only = requestedShots, !only.contains(shot.name) { continue }
-            let viewModel = NotchViewModel(screen: NSScreen.main)
+            let viewModel = NotchViewModel(screen: filmScreen)
             Motion.filmTime = 0
             Motion.filmDate = base
             shot.prepare(viewModel)
@@ -138,7 +145,7 @@ enum FilmRenderer {
         }
 
         // Where the dial and its Start button are, for the cursor to aim at.
-        let closed = NotchViewModel(screen: NSScreen.main).closedNotchSize
+        let closed = NotchViewModel(screen: filmScreen).closedNotchSize
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE MMM d  h:mm a"
         let manifest: [String: Any] = [
@@ -229,8 +236,8 @@ enum FilmRenderer {
             viewModel.expandingView = SneakPeek(show: true, type: .agent)
         }))
 
-        // The soundtrack arriving as a track change: the cover turns in, the
-        // bars play the music under the video, the title sits in the chin.
+        // A track change in the closed notch: the cover turns in, the bars
+        // play, the title sits in the chin.
         list.append(Shot(name: "music-peek", seconds: 1.3, prepare: { viewModel in
             closedBase(viewModel)
             filmMediaSettings()
@@ -238,11 +245,12 @@ enum FilmRenderer {
             viewModel.sneakPeek = SneakPeek(show: true, type: .music)
         }))
 
-        // The home screen with that music playing: the player beside the
-        // weather and today, two agents at work below. It is paused and played
-        // again on the edit's beats, and the scrubber keeps the soundtrack's
-        // own time.
+        // The home screen with that track playing: the player beside the
+        // weather and today, two agents at work below. The next track is
+        // skipped to partway through, and plays from its start.
+        var skipped = false
         list.append(Shot(name: "music-home", seconds: 6.9, prepare: { viewModel in
+            skipped = false
             filmMediaSettings()
             viewModel.previewOpen()
             viewModel.currentTab = .home
@@ -258,11 +266,15 @@ enum FilmRenderer {
             MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: musicHomeTrackTime, playing: true))
             viewModel.setPreviewMusicActivity(true)
         }, pose: { _, t in
-            let playing = t < musicPauseAt || t >= musicResumeAt
-            let elapsed = t < musicPauseAt
-                ? musicHomeTrackTime + t
-                : (playing ? musicResumeTrackTime + (t - musicResumeAt) : musicHomeTrackTime + musicPauseAt)
-            MusicManager.shared.injectPreviewPlayback(elapsed: elapsed, isPlaying: playing)
+            if t < musicSkipAt {
+                MusicManager.shared.injectPreviewPlayback(elapsed: musicHomeTrackTime + t, isPlaying: true)
+            } else {
+                if !skipped {
+                    skipped = true
+                    MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: 0, playing: true, next: true))
+                }
+                MusicManager.shared.injectPreviewPlayback(elapsed: t - musicSkipAt, isPlaying: true)
+            }
         }))
 
         // The shelf: the drop zone lighting up, then holding the file.
@@ -319,7 +331,7 @@ enum FilmRenderer {
             settings.idleLeftWidgets = [.clock]
             settings.idleRightWidgets = [.weather]
             settings.closedMediaDisplay = .mediaAndWidgets
-            MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: musicHomeTrackTime, playing: true))
+            MusicManager.shared.injectPreviewTrack(filmTrack(elapsed: 12, playing: true, next: true))
             viewModel.setPreviewMusicActivity(true)
             viewModel.expandingView = SneakPeek()
             measureWidgets(viewModel, besideMedia: true)
@@ -335,13 +347,10 @@ enum FilmRenderer {
     /// timing and the same constants in the cursor path.
     static let focusStartsAt = 2.0
 
-    /// The soundtrack's position when the home opens, and when it is paused
-    /// and played again in that shot. The edit stops the music for the second
-    /// between, and plays it again from the drop, 16.02s into the track.
-    static let musicHomeTrackTime = 13.02
-    static let musicPauseAt = 2.5
-    static let musicResumeAt = 3.5
-    static let musicResumeTrackTime = 16.02
+    /// Where the first track is when the home opens, and when in that shot
+    /// the cursor skips to the next one.
+    static let musicHomeTrackTime = 72.0
+    static let musicSkipAt = 1.5
 
     /// The dial is wound from 5 to 25 minutes between these times, easing in
     /// and out, and snaps to five-minute detents as the real one does.
@@ -493,31 +502,33 @@ enum FilmRenderer {
         return [make("film-a", "Landing page", since: 134), make("film-b", "Fix login bug", since: 41)]
     }
 
-    /// The soundtrack, as the track the notch is playing. `FUNNOTCH_FILM_TRACK`
-    /// names it — `title|artist|album|seconds` — so the notch credits the
-    /// music actually under the video.
-    private static func filmTrack(elapsed: TimeInterval, playing: Bool) -> TrackInfo {
-        let parts = (ProcessInfo.processInfo.environment["FUNNOTCH_FILM_TRACK"] ?? "")
+    /// The track the notch is playing, or the one skipped to. Each is named by
+    /// `FUNNOTCH_FILM_TRACK` / `FUNNOTCH_FILM_TRACK2` — `title|artist|album|seconds`
+    /// — with its cover from `FUNNOTCH_FILM_COVER` / `FUNNOTCH_FILM_COVER2`.
+    private static func filmTrack(elapsed: TimeInterval, playing: Bool, next: Bool = false) -> TrackInfo {
+        let parts = (ProcessInfo.processInfo.environment[next ? "FUNNOTCH_FILM_TRACK2" : "FUNNOTCH_FILM_TRACK"] ?? "")
             .split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         let named = parts.count == 4
         return TrackInfo(
-            title: named ? parts[0] : "Sunset Drive",
-            artist: named ? parts[1] : "FunNotch",
+            title: named ? parts[0] : (next ? "Night Drive" : "Sunset Mode"),
+            artist: named ? parts[1] : "The Notches",
             album: named ? parts[2] : "Film",
-            artwork: filmCover,
+            artwork: next ? filmCover2 : filmCover,
             duration: named ? Double(parts[3]) ?? 180 : 180,
             elapsed: elapsed,
             isPlaying: playing
         )
     }
 
-    /// The cover from `FUNNOTCH_FILM_COVER`, loaded once.
+    /// The covers, loaded once.
     private static let filmCover: NSImage? = ProcessInfo.processInfo.environment["FUNNOTCH_FILM_COVER"]
         .flatMap { NSImage(contentsOfFile: $0) }
+    private static let filmCover2: NSImage? = ProcessInfo.processInfo.environment["FUNNOTCH_FILM_COVER2"]
+        .flatMap { NSImage(contentsOfFile: $0) }
 
-    /// Per-frame bar levels from `FUNNOTCH_FILM_SPECTRUM`, measured from the
-    /// soundtrack: `{"shots": {"music-peek": [[b0, b1, b2, b3], …]}}`, one
-    /// entry per frame of each shot that shows the bars.
+    /// Per-frame bar levels from `FUNNOTCH_FILM_SPECTRUM`:
+    /// `{"shots": {"music-peek": [[b0, b1, b2, b3], …]}}`, one entry per
+    /// frame of each shot that shows the bars.
     private static func loadSpectrum() -> [String: [[Double]]] {
         guard let path = ProcessInfo.processInfo.environment["FUNNOTCH_FILM_SPECTRUM"],
               let data = FileManager.default.contents(atPath: path),
