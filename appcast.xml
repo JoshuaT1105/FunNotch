@@ -3,6 +3,26 @@
     <channel>
         <title>FunNotch</title>
         <item>
+            <title>1.3</title>
+            <pubDate>Sun, 27 Sep 2026 22:00:57 -0500</pubDate>
+            <link>https://funnotch.xyz</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>What's new in FunNotch 1.3</h3>
+                <ul>
+                    <li><b>Dino Run</b> — a second game: an endless runner with a day-to-night sky, gems and a high score. Breakout gets a modern look.</li>
+                    <li><b>Focus &amp; Timer</b> are one tab now, with a dial you wind, a timer and a stopwatch.</li>
+                    <li>The weather is a small <b>pixel-art landscape</b> that lives.</li>
+                    <li><b>Claude Code and Codex</b> tracking rebuilt, with announcements when a session starts, finishes or needs you.</li>
+                    <li>Simpler <b>Settings and Customize</b> windows, and a livelier volume and brightness HUD.</li>
+                    <li>Fixes: nothing hides under the camera any more, and in-app updates are signed correctly.</li>
+                </ul>
+            ]]></description>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.3/FunNotch-1.3.dmg" length="6246288" type="application/octet-stream" sparkle:edSignature="MjA4INjVA1AP9+0ETgQfXAYJwVPuRtQwqMElvuI41l9OYu6m/zXUClc6a2WXyDLX/ADIJjzlgQ3eSjrRmOdJCw=="/>
+        </item>
+        <item>
             <title>1.2</title>
             <pubDate>Sun, 20 Sep 2026 10:25:17 -0500</pubDate>
             <link>https://funnotch.xyz</link>
