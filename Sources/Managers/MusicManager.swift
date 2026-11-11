@@ -37,8 +37,11 @@ final class MusicManager: ObservableObject {
 
     private init() {}
 
-    /// True when MediaRemote is unusable on this OS, so the UI can explain why.
-    var isNowPlayingDeprecated: Bool { NowPlayingController.isDeprecated }
+    /// True when system-wide Now Playing is unavailable: MediaRemote is locked
+    /// on this OS and the bundled helper is not working either.
+    var isNowPlayingDeprecated: Bool {
+        NowPlayingController.isDeprecated && !MediaRemoteAdapter.shared.isUsable
+    }
 
     var isPlaying: Bool { track.isPlaying }
 
@@ -110,7 +113,11 @@ final class MusicManager: ObservableObject {
         // If the chosen backend cannot see anything (app not running, or
         // MediaRemote locked down) fall through to one that can.
         let chosen: MediaController
-        if candidate.isAvailable {
+        if desired != .nowPlaying, track.isEmpty, systemNowPlayingHasTrack {
+            // The chosen source has nothing, but something else is playing —
+            // a podcast app, VLC, a video. System-wide Now Playing sees it.
+            chosen = NowPlayingController()
+        } else if candidate.isAvailable {
             chosen = candidate
         } else if let alternative = firstAvailableFallback(excluding: desired) {
             chosen = alternative
@@ -125,10 +132,20 @@ final class MusicManager: ObservableObject {
 
         controller?.stop()
         controller = chosen
+        DiagnosticLog.write("media", "backend \(chosen.type.rawValue) (selected \(desired.rawValue))")
         chosen.onUpdate = { [weak self] info in
             MainActor.assumeIsolated { self?.handle(info) }
         }
         chosen.start()
+    }
+
+    /// True when the system-wide route (the MediaRemote helper on macOS 15.4+)
+    /// currently reports a track, whichever source is selected.
+    private var systemNowPlayingHasTrack: Bool {
+        guard NowPlayingController.isDeprecated else { return false }
+        let adapter = MediaRemoteAdapter.shared
+        adapter.startIfNeeded()
+        return adapter.isUsable && !adapter.track.isEmpty
     }
 
     private func makeController(for type: MediaControllerType) -> MediaController {

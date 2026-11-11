@@ -31,8 +31,8 @@ cd "$(dirname "$0")"
 
 APP_NAME="FunNotch"
 BUNDLE_ID="com.funnotch.FunNotch"
-VERSION="1.3"
-BUILD_NUMBER="6"
+VERSION="1.4"
+BUILD_NUMBER="7"
 MIN_MACOS="14.0"
 
 BUILD_DIR="build"
@@ -142,6 +142,27 @@ fi
 echo "==> Embedding Sparkle"
 rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
 cp -R "$SPARKLE_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
+
+echo "==> Building the MediaRemote adapter"
+# macOS 15.4+ only tells entitled processes what is playing. /usr/bin/perl is
+# one, so the app runs this small helper through it. Bundled, never linked.
+ADAPTER_SRC="$(cd "$(dirname "$0")" && pwd)/ThirdParty/mediaremote-adapter"
+ADAPTER_OUT="$RESOURCES_DIR/MediaRemoteAdapter"
+mkdir -p "$ADAPTER_OUT/MediaRemoteAdapter.framework"
+xcrun clang -dynamiclib -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" \
+  -fobjc-arc -fvisibility=default -w \
+  -I"$ADAPTER_SRC/include" -I"$ADAPTER_SRC/src" \
+  "$ADAPTER_SRC"/src/adapter/*.m "$ADAPTER_SRC/src/private/MediaRemote.m" "$ADAPTER_SRC"/src/utility/*.m \
+  -framework Foundation -framework AppKit -framework UniformTypeIdentifiers \
+  -install_name @rpath/MediaRemoteAdapter.framework/MediaRemoteAdapter \
+  -o "$ADAPTER_OUT/MediaRemoteAdapter.framework/MediaRemoteAdapter"
+xcrun clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -fobjc-arc -w \
+  "$ADAPTER_SRC/src/test/main.m" "$ADAPTER_SRC/src/test/NowPlayingTest.m" \
+  -framework Foundation -framework AppKit -framework MediaPlayer \
+  -o "$ADAPTER_OUT/MediaRemoteAdapterTestClient"
+cp "$ADAPTER_SRC/bin/mediaremote-adapter.pl" "$ADAPTER_SRC/LICENSE" "$ADAPTER_OUT/"
+codesign --force --sign - "$ADAPTER_OUT/MediaRemoteAdapter.framework/MediaRemoteAdapter" \
+  "$ADAPTER_OUT/MediaRemoteAdapterTestClient"
 
 echo "==> Writing Info.plist"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST

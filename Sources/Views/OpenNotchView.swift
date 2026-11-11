@@ -315,6 +315,9 @@ struct PlayerControls: View {
         if music.isNowPlayingDeprecated, settings.mediaController == .nowPlaying {
             return "macOS no longer exposes system-wide Now Playing. Pick Music or Spotify in Settings."
         }
+        if settings.mediaController == .nowPlaying {
+            return "Start playing something in any app."
+        }
         return "Start playing something in \(settings.mediaController.rawValue)."
     }
 

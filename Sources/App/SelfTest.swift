@@ -30,6 +30,7 @@ enum SelfTest {
         print(report.plainText)
         // Returning here would only fall back into `NSApplication.run()`, and
         // an accessory app with no windows never comes back out of it.
+        MediaRemoteAdapter.shared.stop()
         exit(0)
     }
 
@@ -88,6 +89,7 @@ enum SelfTest {
         if added, let item = ShelfManager.shared.items.first(where: { $0.url == url }) {
             ShelfManager.shared.remove(id: item.id)
         }
+        MediaRemoteAdapter.shared.stop()
         exit(0)
     }
 
@@ -115,6 +117,7 @@ enum SelfTest {
         // MARK: Geometry
         guard let screen = NSScreen.main else {
             print("[FAIL] no main screen")
+            MediaRemoteAdapter.shared.stop()
             exit(1)
         }
         info("display", "\(screen.localizedName) \(Int(screen.frame.width))x\(Int(screen.frame.height))")
@@ -222,7 +225,30 @@ enum SelfTest {
         }
 
 
-        info("Now Playing deprecated on this OS", "\(MusicManager.shared.isNowPlayingDeprecated)")
+        check("MediaRemote helper is bundled", MediaRemoteAdapter.filesPresent)
+        if NowPlayingController.isDeprecated {
+            let result = MediaRemoteAdapter.runSynchronously(["get", "--no-artwork", "--micros", "--allow-missing-title"])
+            let firstLine = result.output.split(separator: "\n").first.map(String.init) ?? ""
+            check(
+                "MediaRemote helper answers through /usr/bin/perl",
+                result.status == 0 && (firstLine == "null" || firstLine.hasPrefix("{")),
+                detail: "status \(result.status): \(firstLine.prefix(120))"
+            )
+            // Something is reporting playback system-wide: it must reach the
+            // notch whichever source is selected (issue #1).
+            if result.status == 0, firstLine.hasPrefix("{") {
+                let deadline = Date().addingTimeInterval(12)
+                while MusicManager.shared.track.isEmpty, Date() < deadline {
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+                }
+                check(
+                    "a track playing in any app reaches the notch",
+                    !MusicManager.shared.track.isEmpty,
+                    detail: "backend \(MusicManager.shared.activeControllerType?.rawValue ?? "none"), source \(MusicManager.shared.track.bundleIdentifier ?? "unknown")"
+                )
+            }
+        }
+        info("Now Playing unavailable on this OS", "\(MusicManager.shared.isNowPlayingDeprecated)")
         info("selected media backend", Settings.shared.mediaController.rawValue)
         info("active media backend", MusicManager.shared.activeControllerType?.rawValue ?? "none")
         info("Music running", "\(AppleScriptRunner.isRunning("com.apple.Music"))")
@@ -1371,6 +1397,7 @@ enum SelfTest {
         for failure in failures {
             print("  - \(failure)")
         }
+        MediaRemoteAdapter.shared.stop()
         exit(failures.isEmpty ? 0 : 1)
     }
 }

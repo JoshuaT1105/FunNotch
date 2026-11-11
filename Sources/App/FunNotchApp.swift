@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MouseTracker.shared.stop()
         WebcamManager.shared.stop()
+        MediaRemoteAdapter.shared.stop()
     }
 
     /// Reopening from Finder or a second launch just shows the settings window.

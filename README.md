@@ -34,8 +34,9 @@ Free and open source. No account, no subscription, no telemetry.
 - **Weather** — when nothing is playing, the panel shows the forecast as an
   animated pixel scene that changes with the weather: sun, rain onto a skyline,
   drifting snow, lightning.
-- **Media** — now playing from Music, Spotify and any browser, with artwork, a
-  live spectrum, and a progress bar you can drag to seek.
+- **Media** — now playing from any app — Music, Spotify, browsers, podcast
+  apps, video players — with artwork, a live spectrum, and a progress bar you
+  can drag to seek.
 - **Shelf** — a drag-and-drop file shelf that opens to meet a drag already in
   flight. AirDrop and share straight off it; catches new screenshots and
   finished downloads on its own.
@@ -197,8 +198,13 @@ Issues and pull requests are welcome. A few things worth knowing:
 FunNotch began as a rebuild of
 **[TheBoringNotch](https://github.com/TheBoredTeam/boring.notch)**, which got to
 the idea first and is a genuinely good app. There is an
-[honest comparison](https://funnotch.xyz/#compare) on the website, including the
+[honest comparison](https://funnotch.xyz/alternatives) on the website, including the
 things theirs does better.
+
+System-wide Now Playing on macOS 15.4 and later comes from
+**[mediaremote-adapter](https://github.com/ungive/mediaremote-adapter)** by
+ungive (BSD 3-Clause), vendored in `ThirdParty/mediaremote-adapter`. BoringNotch
+uses it too.
 
 ## Licence
 

@@ -135,6 +135,24 @@ final class DiagnosticsReport: ObservableObject {
             rows.append(Row(label: "Backend", verdict: .good(active?.rawValue ?? chosen.rawValue)))
         }
 
+        if NowPlayingController.isDeprecated {
+            let adapter = MediaRemoteAdapter.shared
+            rows.append(Row(
+                label: "System Now Playing",
+                verdict: {
+                    switch adapter.health {
+                    case .working: return .good("working through the bundled helper")
+                    case .starting: return .unknown("starting")
+                    case .missing: return .missing("helper not in this build")
+                    case .broken(let reason): return .missing(reason)
+                    }
+                }(),
+                remedy: adapter.isUsable
+                    ? nil
+                    : "Fun Notch falls back to Music, Spotify and browser tabs. Please report this on GitHub with your macOS version."
+            ))
+        }
+
         let track = music.track
         rows.append(Row(
             label: "Now playing",

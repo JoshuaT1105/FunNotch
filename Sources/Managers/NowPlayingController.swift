@@ -3,9 +3,11 @@
 //  FunNotch
 //
 //  System-wide now playing via the private MediaRemote framework. This is the
-//  only backend that sees browsers and third-party players, but Apple gated it
-//  behind a private entitlement in macOS 15.4, so it degrades to "unavailable"
-//  there and the app falls back to the scripted controllers.
+//  only backend that sees every player: browsers, Podcasts, VLC, IINA and the
+//  rest. Apple gated it behind a private entitlement in macOS 15.4; from then on
+//  the same information comes through the bundled helper in
+//  MediaRemoteAdapter.swift, and only if that fails does the app fall back to
+//  the scripted controllers.
 //
 
 import AppKit
@@ -54,8 +56,13 @@ final class NowPlayingController: MediaController {
         loadFramework()
     }
 
+    /// On macOS 15.4+ MediaRemote is read through the helper instead.
+    private var usesAdapter: Bool { Self.isDeprecated }
+    private var adapterListener: UUID?
+
     var isAvailable: Bool {
-        getNowPlayingInfo != nil && (everAnswered || !Self.isDeprecated)
+        if usesAdapter { return MediaRemoteAdapter.shared.isUsable }
+        return getNowPlayingInfo != nil
     }
 
     private func loadFramework() {
@@ -77,6 +84,13 @@ final class NowPlayingController: MediaController {
 
     func start() {
         stop()
+        if usesAdapter {
+            adapterListener = MediaRemoteAdapter.shared.addListener { [weak self] in
+                self?.refresh()
+            }
+            refresh()
+            return
+        }
         registerForNotifications?(.main)
 
         for name in [
@@ -103,6 +117,10 @@ final class NowPlayingController: MediaController {
     }
 
     func stop() {
+        if let adapterListener {
+            MediaRemoteAdapter.shared.removeListener(adapterListener)
+            self.adapterListener = nil
+        }
         timer?.invalidate()
         timer = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
@@ -110,6 +128,14 @@ final class NowPlayingController: MediaController {
     }
 
     func refresh() {
+        if usesAdapter {
+            let info = MediaRemoteAdapter.shared.track
+            // Unchanged state arrives with every position tick; only pass on news.
+            guard info != current || abs(info.elapsed - current.elapsed) > 1.5 else { return }
+            current = info
+            onUpdate?(info)
+            return
+        }
         guard let getNowPlayingInfo else { return }
 
         getNowPlayingInfo(.main) { [weak self] information in
@@ -143,14 +169,28 @@ final class NowPlayingController: MediaController {
         }
     }
 
-    func togglePlayPause() { _ = sendCommand?(MRCommand.togglePlayPause.rawValue, nil) }
-    func play() { _ = sendCommand?(MRCommand.play.rawValue, nil) }
-    func pause() { _ = sendCommand?(MRCommand.pause.rawValue, nil) }
-    func nextTrack() { _ = sendCommand?(MRCommand.nextTrack.rawValue, nil) }
-    func previousTrack() { _ = sendCommand?(MRCommand.previousTrack.rawValue, nil) }
+    func togglePlayPause() { command(.togglePlayPause, .togglePlayPause) }
+    func play() { command(.play, .play) }
+    func pause() { command(.pause, .pause) }
+    func nextTrack() { command(.nextTrack, .nextTrack) }
+    func previousTrack() { command(.previousTrack, .previousTrack) }
+    func toggleShuffle() { if usesAdapter { MediaRemoteAdapter.shared.send(.toggleShuffle) } }
+    func cycleRepeat() { if usesAdapter { MediaRemoteAdapter.shared.send(.toggleRepeat) } }
+
+    private func command(_ direct: MRCommand, _ viaAdapter: MediaRemoteAdapter.Command) {
+        if usesAdapter {
+            MediaRemoteAdapter.shared.send(viaAdapter)
+        } else {
+            _ = sendCommand?(direct.rawValue, nil)
+        }
+    }
 
     func seek(to time: TimeInterval) {
-        setElapsedTime?(time)
+        if usesAdapter {
+            MediaRemoteAdapter.shared.seek(to: time)
+        } else {
+            setElapsedTime?(time)
+        }
         current.elapsed = time
         current.timestamp = Date()
         onUpdate?(current)
