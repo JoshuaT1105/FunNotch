@@ -3,6 +3,23 @@
     <channel>
         <title>FunNotch</title>
         <item>
+            <title>1.4</title>
+            <pubDate>Tue, 10 Nov 2026 20:49:17 -0600</pubDate>
+            <link>https://funnotch.xyz</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>What's new in FunNotch 1.4</h3>
+                <ul>
+                    <li><b>Now Playing works with every app again.</b> On macOS 15.4 and later, podcast apps, video players, QuickTime, VLC and anything else in Control Center now show up in the notch, with artwork, a seek bar and working controls.</li>
+                    <li>If the source you picked has nothing playing but another app does, the notch shows that app instead of staying empty.</li>
+                    <li>Settings → Diagnostics shows whether system-wide Now Playing is working.</li>
+                </ul>
+            ]]></description>
+            <enclosure url="https://github.com/JoshuaT1105/FunNotch/releases/download/v1.4/FunNotch-1.4.dmg" length="6615316" type="application/octet-stream" sparkle:edSignature="B56jEqHiFOt0crDRJR3PvCUaaYJ4Invu0N2PcbCZ9xqmMu3iAup8q00HKQ59NMJBn0aTHdn6QV+xsMUsLKdDAg=="/>
+        </item>
+        <item>
             <title>1.3</title>
             <pubDate>Sun, 27 Sep 2026 22:00:57 -0500</pubDate>
             <link>https://funnotch.xyz</link>
